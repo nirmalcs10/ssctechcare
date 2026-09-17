@@ -4,12 +4,12 @@ const db = require('../db/database');
 const { requireRole } = require('./auth');
 
 // GET all customers with search & stats
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { search } = req.query;
     let query = `
       SELECT 
-        c.*,
+        c.id, c.name, c.phone, c.alt_phone, c.email, c.address, c.notes, c.created_at,
         COUNT(t.id) as total_tickets,
         COALESCE(SUM(inv.grand_total), 0) as total_spent
       FROM customers c
@@ -20,14 +20,14 @@ router.get('/', (req, res) => {
     const params = [];
 
     if (search) {
-      query += ` AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.address LIKE ?)`;
+      query += ` AND (c.name ILIKE ? OR c.phone ILIKE ? OR c.email ILIKE ? OR c.address ILIKE ?)`;
       const s = `%${search}%`;
       params.push(s, s, s, s);
     }
 
-    query += ` GROUP BY c.id ORDER BY c.created_at DESC`;
+    query += ` GROUP BY c.id, c.name, c.phone, c.alt_phone, c.email, c.address, c.notes, c.created_at ORDER BY c.created_at DESC`;
 
-    const customers = db.prepare(query).all(...params);
+    const customers = await db.prepare(query).all(...params);
     res.json(customers);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -35,12 +35,12 @@ router.get('/', (req, res) => {
 });
 
 // GET single customer with complete ticket history
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+    const customer = await db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    const tickets = db.prepare(`
+    const tickets = await db.prepare(`
       SELECT 
         t.*,
         tech.name as technician_name,
@@ -61,21 +61,21 @@ router.get('/:id', (req, res) => {
 });
 
 // POST add new customer
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, phone, alt_phone, email, address, notes } = req.body;
     if (!name || !phone) {
       return res.status(400).json({ error: 'Customer name and phone number are required' });
     }
 
-    const existing = db.prepare('SELECT id FROM customers WHERE phone = ?').get(phone);
+    const existing = await db.prepare('SELECT id FROM customers WHERE phone = ?').get(phone);
     if (existing) {
       return res.status(400).json({ error: 'A customer with this phone number already exists', existingId: existing.id });
     }
 
-    const insert = db.prepare(`
+    const insert = await db.prepare(`
       INSERT INTO customers (name, phone, alt_phone, email, address, notes, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(name, phone, alt_phone || '', email || '', address || '', notes || '');
 
     res.status(201).json({ id: insert.lastInsertRowid, message: 'Customer registered successfully' });
@@ -85,25 +85,25 @@ router.post('/', (req, res) => {
 });
 
 // PUT update customer
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const customerId = parseInt(req.params.id, 10);
     const { name, phone, alt_phone, email, address, notes } = req.body;
 
-    const existing = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
+    const existing = await db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
     if (!existing) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
     // Check if new phone is already taken by another customer
     if (phone && phone !== existing.phone) {
-      const duplicate = db.prepare('SELECT id FROM customers WHERE phone = ? AND id != ?').get(phone, customerId);
+      const duplicate = await db.prepare('SELECT id FROM customers WHERE phone = ? AND id != ?').get(phone, customerId);
       if (duplicate) {
         return res.status(400).json({ error: 'This phone number is already registered to another customer' });
       }
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE customers SET
         name = ?,
         phone = ?,
@@ -122,7 +122,7 @@ router.put('/:id', (req, res) => {
       customerId
     );
 
-    const updated = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
+    const updated = await db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
     res.json({ message: 'Customer updated successfully', customer: updated });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -130,15 +130,16 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE customer (supports force=true to cascade delete associated records - Admin only)
-router.delete('/:id', requireRole('admin'), (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const customerId = parseInt(req.params.id, 10);
-    const existing = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
+    const existing = await db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId);
     if (!existing) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    const ticketCount = db.prepare('SELECT COUNT(*) as count FROM tickets WHERE customer_id = ?').get(customerId).count;
+    const ticketCountRes = await db.prepare('SELECT COUNT(*) as count FROM tickets WHERE customer_id = ?').get(customerId);
+    const ticketCount = ticketCountRes ? parseInt(ticketCountRes.count, 10) : 0;
     const force = req.query.force === 'true';
 
     if (ticketCount > 0 && !force) {
@@ -149,23 +150,22 @@ router.delete('/:id', requireRole('admin'), (req, res) => {
     }
 
     if (ticketCount > 0 && force) {
-      const deleteTx = db.transaction(() => {
+      await db.transaction(async (tx) => {
         // Delete invoices for customer
-        db.prepare('DELETE FROM invoices WHERE customer_id = ?').run(customerId);
+        await tx.prepare('DELETE FROM invoices WHERE customer_id = ?').run(customerId);
         // Find tickets for customer
-        const tickets = db.prepare('SELECT id FROM tickets WHERE customer_id = ?').all(customerId);
+        const tickets = await tx.prepare('SELECT id FROM tickets WHERE customer_id = ?').all(customerId);
         for (const t of tickets) {
-          db.prepare('DELETE FROM ticket_parts WHERE ticket_id = ?').run(t.id);
-          db.prepare('DELETE FROM timeline_logs WHERE ticket_id = ?').run(t.id);
-          db.prepare('DELETE FROM invoices WHERE ticket_id = ?').run(t.id);
+          await tx.prepare('DELETE FROM ticket_parts WHERE ticket_id = ?').run(t.id);
+          await tx.prepare('DELETE FROM timeline_logs WHERE ticket_id = ?').run(t.id);
+          await tx.prepare('DELETE FROM invoices WHERE ticket_id = ?').run(t.id);
         }
-        db.prepare('DELETE FROM tickets WHERE customer_id = ?').run(customerId);
-        db.prepare('DELETE FROM customers WHERE id = ?').run(customerId);
+        await tx.prepare('DELETE FROM tickets WHERE customer_id = ?').run(customerId);
+        await tx.prepare('DELETE FROM customers WHERE id = ?').run(customerId);
       });
-      deleteTx();
     } else {
-      db.prepare('DELETE FROM invoices WHERE customer_id = ?').run(customerId);
-      db.prepare('DELETE FROM customers WHERE id = ?').run(customerId);
+      await db.prepare('DELETE FROM invoices WHERE customer_id = ?').run(customerId);
+      await db.prepare('DELETE FROM customers WHERE id = ?').run(customerId);
     }
 
     res.json({ message: 'Customer deleted successfully' });

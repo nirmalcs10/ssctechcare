@@ -1,6 +1,6 @@
 const db = require('./database');
 
-function seedData() {
+async function seedData() {
   console.log('Seeding Computer Service Center database...');
 
   // 1. Technicians
@@ -17,7 +17,7 @@ function seedData() {
       { name: 'Priya Nair', phone: '+91 98710 55667', email: 'priya@ssctechcare.com', specialization: 'Storage Upgrades, OS & Data Recovery', status: 'Active' },
       { name: 'Karan Patel', phone: '+91 98990 77889', email: 'karan@ssctechcare.com', specialization: 'Gaming Rigs, Thermals & PSU Diagnostics', status: 'Active' }
     ];
-    for (const t of techs) insertTech.run(t);
+    for (const t of techs) await insertTech.run(t);
     console.log('✓ Technicians seeded');
   }
 
@@ -37,7 +37,7 @@ function seedData() {
       { name: 'Meera Iyer', phone: '9855667788', alt_phone: '', email: 'meera.iyer@gmail.com', address: '104, Indiranagar 100ft Road', notes: 'College student, budget conscious' },
       { name: 'David Fernandez', phone: '9866778899', alt_phone: '9866778800', email: 'david.f@musicprod.net', address: 'Penthouse 3, MG Road Residency', notes: 'High-end audio editing workstation' }
     ];
-    for (const c of customers) insertCustomer.run(c);
+    for (const c of customers) await insertCustomer.run(c);
     console.log('✓ Customers seeded');
   }
 
@@ -66,7 +66,7 @@ function seedData() {
       { sku: 'FAN-ASUS-ROG', name: 'Asus ROG Strix G15 Dual CPU+GPU Replacement Fan Set', category: 'Cooling & Fan', brand_compat: 'Asus ROG G512 / G531 series', cost_price: 1400, selling_price: 2300, stock_quantity: 2, min_threshold: 2, location: 'Bin C-3' },
       { sku: 'HINGE-UNIV-SET', name: 'Universal Brass Insert & Epoxy Hinge Repair Kit', category: 'Motherboard & ICs', brand_compat: 'All cracked laptop chassis hinges', cost_price: 300, selling_price: 800, stock_quantity: 15, min_threshold: 4, location: 'Drawer Bench' }
     ];
-    for (const item of inventoryItems) insertInventory.run(item);
+    for (const item of inventoryItems) await insertInventory.run(item);
     console.log('✓ Inventory seeded');
   }
 
@@ -98,7 +98,7 @@ function seedData() {
   const existingTickets = db.prepare('SELECT COUNT(*) as count FROM tickets').get();
   if (existingTickets.count === 0) {
     // Ticket 1: In Repair (Dell XPS Screen & Hinge)
-    const t1 = insertTicket.run({
+    const t1 = await insertTicket.run({
       ticket_number: 'REP-2026-0001',
       customer_id: 1,
       device_type: 'Laptop',
@@ -133,16 +133,16 @@ function seedData() {
     });
 
     const t1Id = t1.lastInsertRowid;
-    insertTicketPart.run({ ticket_id: t1Id, inventory_id: 6, part_name: '15.6" Slim 30-Pin FHD IPS Matte Screen', quantity: 1, unit_price: 5500, total_price: 5500 });
-    insertTicketPart.run({ ticket_id: t1Id, inventory_id: 15, part_name: 'Universal Brass Insert & Epoxy Hinge Repair Kit', quantity: 1, unit_price: 800, total_price: 800 });
+    await insertTicketPart.run({ ticket_id: t1Id, inventory_id: 6, part_name: '15.6" Slim 30-Pin FHD IPS Matte Screen', quantity: 1, unit_price: 5500, total_price: 5500 });
+    await insertTicketPart.run({ ticket_id: t1Id, inventory_id: 15, part_name: 'Universal Brass Insert & Epoxy Hinge Repair Kit', quantity: 1, unit_price: 800, total_price: 800 });
 
-    insertTimeline.run({ ticket_id: t1Id, action: 'Ticket Created', description: 'Device checked in at front desk with charger and sleeve.', actor: 'Front Desk', created_at: '2026-09-13 10:15:00' });
-    insertTimeline.run({ ticket_id: t1Id, action: 'Assigned', description: 'Assigned to Rajesh Varma for body & display repair.', actor: 'System', created_at: '2026-09-13 11:00:00' });
-    insertTimeline.run({ ticket_id: t1Id, action: 'Quotation Approved', description: 'Customer approved estimate of ₹6,500. Advance ₹2,000 received via UPI.', actor: 'Rajesh Varma', created_at: '2026-09-13 14:20:00' });
-    insertTimeline.run({ ticket_id: t1Id, action: 'Repair Started', description: 'Display disassembled; brass hinge mount curing with high-strength epoxy resin.', actor: 'Rajesh Varma', created_at: '2026-09-14 11:30:00' });
+    await insertTimeline.run({ ticket_id: t1Id, action: 'Ticket Created', description: 'Device checked in at front desk with charger and sleeve.', actor: 'Front Desk', created_at: '2026-09-13 10:15:00' });
+    await insertTimeline.run({ ticket_id: t1Id, action: 'Assigned', description: 'Assigned to Rajesh Varma for body & display repair.', actor: 'System', created_at: '2026-09-13 11:00:00' });
+    await insertTimeline.run({ ticket_id: t1Id, action: 'Quotation Approved', description: 'Customer approved estimate of ₹6,500. Advance ₹2,000 received via UPI.', actor: 'Rajesh Varma', created_at: '2026-09-13 14:20:00' });
+    await insertTimeline.run({ ticket_id: t1Id, action: 'Repair Started', description: 'Display disassembled; brass hinge mount curing with high-strength epoxy resin.', actor: 'Rajesh Varma', created_at: '2026-09-14 11:30:00' });
 
     // Ticket 2: In Diagnosis (MacBook Air Liquid Spill)
-    const t2 = insertTicket.run({
+    const t2 = await insertTicket.run({
       ticket_number: 'REP-2026-0002',
       customer_id: 2,
       device_type: 'MacBook',
@@ -177,11 +177,11 @@ function seedData() {
     });
 
     const t2Id = t2.lastInsertRowid;
-    insertTimeline.run({ ticket_id: t2Id, action: 'Ticket Created', description: 'Urgent intake: Coffee liquid spill on MacBook Air M1.', actor: 'Front Desk', created_at: '2026-09-14 09:30:00' });
-    insertTimeline.run({ ticket_id: t2Id, action: 'Diagnostic In Progress', description: 'Motherboard removed; inspecting power rails under microscope.', actor: 'Amit Sharma', created_at: '2026-09-14 11:45:00' });
+    await insertTimeline.run({ ticket_id: t2Id, action: 'Ticket Created', description: 'Urgent intake: Coffee liquid spill on MacBook Air M1.', actor: 'Front Desk', created_at: '2026-09-14 09:30:00' });
+    await insertTimeline.run({ ticket_id: t2Id, action: 'Diagnostic In Progress', description: 'Motherboard removed; inspecting power rails under microscope.', actor: 'Amit Sharma', created_at: '2026-09-14 11:45:00' });
 
     // Ticket 3: Testing / QC (Lenovo ThinkPad SSD & RAM Upgrade)
-    const t3 = insertTicket.run({
+    const t3 = await insertTicket.run({
       ticket_number: 'REP-2026-0003',
       customer_id: 3,
       device_type: 'Laptop',
@@ -216,17 +216,17 @@ function seedData() {
     });
 
     const t3Id = t3.lastInsertRowid;
-    insertTicketPart.run({ ticket_id: t3Id, inventory_id: 5, part_name: 'Samsung 980 Pro 1TB Gen4 NVMe SSD with Heatsink', quantity: 1, unit_price: 7900, total_price: 7900 });
-    insertTicketPart.run({ ticket_id: t3Id, inventory_id: 2, part_name: 'Kingston Fury 16GB DDR4 3200MHz SODIMM Laptop RAM', quantity: 1, unit_price: 3400, total_price: 3400 });
-    insertTicketPart.run({ ticket_id: t3Id, inventory_id: 10, part_name: 'Arctic MX-4 High Performance Thermal Paste (4g)', quantity: 1, unit_price: 350, total_price: 350 });
+    await insertTicketPart.run({ ticket_id: t3Id, inventory_id: 5, part_name: 'Samsung 980 Pro 1TB Gen4 NVMe SSD with Heatsink', quantity: 1, unit_price: 7900, total_price: 7900 });
+    await insertTicketPart.run({ ticket_id: t3Id, inventory_id: 2, part_name: 'Kingston Fury 16GB DDR4 3200MHz SODIMM Laptop RAM', quantity: 1, unit_price: 3400, total_price: 3400 });
+    await insertTicketPart.run({ ticket_id: t3Id, inventory_id: 10, part_name: 'Arctic MX-4 High Performance Thermal Paste (4g)', quantity: 1, unit_price: 350, total_price: 350 });
 
-    insertTimeline.run({ ticket_id: t3Id, action: 'Ticket Created', description: 'Customer dropped laptop for SSD & RAM performance overhaul.', actor: 'Front Desk', created_at: '2026-09-12 11:20:00' });
-    insertTimeline.run({ ticket_id: t3Id, action: 'Customer Approved', description: 'Customer approved 1TB Samsung 980 Pro + 16GB RAM upgrade.', actor: 'Priya Nair', created_at: '2026-09-12 15:10:00' });
-    insertTimeline.run({ ticket_id: t3Id, action: 'Hardware Installed', description: 'Installed SSD, RAM, and fresh Windows 11 OS.', actor: 'Priya Nair', created_at: '2026-09-13 17:30:00' });
-    insertTimeline.run({ ticket_id: t3Id, action: 'QC Burn-in Test', description: 'Running MemTest86 and CrystalDiskMark benchmark. Boot time down to 9 seconds!', actor: 'Priya Nair', created_at: '2026-09-14 12:00:00' });
+    await insertTimeline.run({ ticket_id: t3Id, action: 'Ticket Created', description: 'Customer dropped laptop for SSD & RAM performance overhaul.', actor: 'Front Desk', created_at: '2026-09-12 11:20:00' });
+    await insertTimeline.run({ ticket_id: t3Id, action: 'Customer Approved', description: 'Customer approved 1TB Samsung 980 Pro + 16GB RAM upgrade.', actor: 'Priya Nair', created_at: '2026-09-12 15:10:00' });
+    await insertTimeline.run({ ticket_id: t3Id, action: 'Hardware Installed', description: 'Installed SSD, RAM, and fresh Windows 11 OS.', actor: 'Priya Nair', created_at: '2026-09-13 17:30:00' });
+    await insertTimeline.run({ ticket_id: t3Id, action: 'QC Burn-in Test', description: 'Running MemTest86 and CrystalDiskMark benchmark. Boot time down to 9 seconds!', actor: 'Priya Nair', created_at: '2026-09-14 12:00:00' });
 
     // Ticket 4: Ready For Pickup (Custom Gaming PC Overheating)
-    const t4 = insertTicket.run({
+    const t4 = await insertTicket.run({
       ticket_number: 'REP-2026-0004',
       customer_id: 4,
       device_type: 'Gaming Rig',
@@ -261,16 +261,16 @@ function seedData() {
     });
 
     const t4Id = t4.lastInsertRowid;
-    insertTicketPart.run({ ticket_id: t4Id, inventory_id: 13, part_name: 'DeepCool PK650D 650W 80 Plus Bronze Power Supply', quantity: 1, unit_price: 4600, total_price: 4600 });
-    insertTicketPart.run({ ticket_id: t4Id, inventory_id: 10, part_name: 'Arctic MX-4 High Performance Thermal Paste (4g)', quantity: 1, unit_price: 750, total_price: 750 });
+    await insertTicketPart.run({ ticket_id: t4Id, inventory_id: 13, part_name: 'DeepCool PK650D 650W 80 Plus Bronze Power Supply', quantity: 1, unit_price: 4600, total_price: 4600 });
+    await insertTicketPart.run({ ticket_id: t4Id, inventory_id: 10, part_name: 'Arctic MX-4 High Performance Thermal Paste (4g)', quantity: 1, unit_price: 750, total_price: 750 });
 
-    insertTimeline.run({ ticket_id: t4Id, action: 'Ticket Created', description: 'Gaming desktop intake for severe overheating & sudden shutdown.', actor: 'Front Desk', created_at: '2026-09-11 16:45:00' });
-    insertTimeline.run({ ticket_id: t4Id, action: 'Parts Replaced', description: 'Replaced PSU and repasted CPU/GPU with MX-4.', actor: 'Karan Patel', created_at: '2026-09-13 16:00:00' });
-    insertTimeline.run({ ticket_id: t4Id, action: 'QC Passed', description: '2hr stress benchmark passed without crash. Rig runs quiet and cold.', actor: 'Karan Patel', created_at: '2026-09-14 09:30:00' });
-    insertTimeline.run({ ticket_id: t4Id, action: 'Ready for Pickup', description: 'SMS notification sent to customer Sanjay Reddy.', actor: 'System', created_at: '2026-09-14 10:15:00' });
+    await insertTimeline.run({ ticket_id: t4Id, action: 'Ticket Created', description: 'Gaming desktop intake for severe overheating & sudden shutdown.', actor: 'Front Desk', created_at: '2026-09-11 16:45:00' });
+    await insertTimeline.run({ ticket_id: t4Id, action: 'Parts Replaced', description: 'Replaced PSU and repasted CPU/GPU with MX-4.', actor: 'Karan Patel', created_at: '2026-09-13 16:00:00' });
+    await insertTimeline.run({ ticket_id: t4Id, action: 'QC Passed', description: '2hr stress benchmark passed without crash. Rig runs quiet and cold.', actor: 'Karan Patel', created_at: '2026-09-14 09:30:00' });
+    await insertTimeline.run({ ticket_id: t4Id, action: 'Ready for Pickup', description: 'SMS notification sent to customer Sanjay Reddy.', actor: 'System', created_at: '2026-09-14 10:15:00' });
 
     // Ticket 5: Quotation Pending (HP Pavilion Battery Swelling)
-    const t5 = insertTicket.run({
+    const t5 = await insertTicket.run({
       ticket_number: 'REP-2026-0005',
       customer_id: 5,
       device_type: 'Laptop',
@@ -305,11 +305,11 @@ function seedData() {
     });
 
     const t5Id = t5.lastInsertRowid;
-    insertTimeline.run({ ticket_id: t5Id, action: 'Ticket Created', description: 'Intake: Swollen battery lifting trackpad.', actor: 'Front Desk', created_at: '2026-09-14 10:00:00' });
-    insertTimeline.run({ ticket_id: t5Id, action: 'Diagnosed', description: 'Swollen pack isolated safely. Quotation sent to Meera Iyer.', actor: 'Rajesh Varma', created_at: '2026-09-14 11:10:00' });
+    await insertTimeline.run({ ticket_id: t5Id, action: 'Ticket Created', description: 'Intake: Swollen battery lifting trackpad.', actor: 'Front Desk', created_at: '2026-09-14 10:00:00' });
+    await insertTimeline.run({ ticket_id: t5Id, action: 'Diagnosed', description: 'Swollen pack isolated safely. Quotation sent to Meera Iyer.', actor: 'Rajesh Varma', created_at: '2026-09-14 11:10:00' });
 
     // Ticket 6: Delivered with Invoice (Asus ROG Strix Fan replacement)
-    const t6 = insertTicket.run({
+    const t6 = await insertTicket.run({
       ticket_number: 'REP-2026-0006',
       customer_id: 6,
       device_type: 'Laptop',
@@ -344,11 +344,11 @@ function seedData() {
     });
 
     const t6Id = t6.lastInsertRowid;
-    insertTicketPart.run({ ticket_id: t6Id, inventory_id: 14, part_name: 'Asus ROG Strix G15 Dual CPU+GPU Replacement Fan Set', quantity: 1, unit_price: 2300, total_price: 2300 });
+    await insertTicketPart.run({ ticket_id: t6Id, inventory_id: 14, part_name: 'Asus ROG Strix G15 Dual CPU+GPU Replacement Fan Set', quantity: 1, unit_price: 2300, total_price: 2300 });
 
-    insertTimeline.run({ ticket_id: t6Id, action: 'Ticket Created', description: 'Intake: Fan grinding noise on Asus ROG.', actor: 'Front Desk', created_at: '2026-09-10 14:00:00' });
-    insertTimeline.run({ ticket_id: t6Id, action: 'Parts Installed', description: 'Installed brand new OEM fans and replaced thermal paste.', actor: 'Karan Patel', created_at: '2026-09-11 16:30:00' });
-    insertTimeline.run({ ticket_id: t6Id, action: 'Delivered', description: 'Delivered to David Fernandez. Final payment received via UPI.', actor: 'Front Desk', created_at: '2026-09-12 18:30:00' });
+    await insertTimeline.run({ ticket_id: t6Id, action: 'Ticket Created', description: 'Intake: Fan grinding noise on Asus ROG.', actor: 'Front Desk', created_at: '2026-09-10 14:00:00' });
+    await insertTimeline.run({ ticket_id: t6Id, action: 'Parts Installed', description: 'Installed brand new OEM fans and replaced thermal paste.', actor: 'Karan Patel', created_at: '2026-09-11 16:30:00' });
+    await insertTimeline.run({ ticket_id: t6Id, action: 'Delivered', description: 'Delivered to David Fernandez. Final payment received via UPI.', actor: 'Front Desk', created_at: '2026-09-12 18:30:00' });
 
     // Seed an Invoice for Ticket 6
     const insertInvoice = db.prepare(`
@@ -363,7 +363,7 @@ function seedData() {
       )
     `);
 
-    insertInvoice.run({
+    await insertInvoice.run({
       invoice_number: 'INV-2026-0001',
       ticket_id: t6Id,
       customer_id: 6,
@@ -389,4 +389,4 @@ function seedData() {
   console.log('Database seeding completed successfully!');
 }
 
-seedData();
+seedData().then(() => { if (require.main === module) process.exit(0); }).catch(e => { console.error(e); process.exit(1); });

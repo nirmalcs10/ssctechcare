@@ -3,8 +3,8 @@ const router = express.Router();
 const db = require('../db/database');
 
 // Helper to generate next invoice number: INV-2026-000X
-function getNextInvoiceNumber() {
-  const row = db.prepare('SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1').get();
+async function getNextInvoiceNumber() {
+  const row = await db.prepare('SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1').get();
   const year = new Date().getFullYear();
   if (!row) return `INV-${year}-0001`;
 
@@ -17,7 +17,7 @@ function getNextInvoiceNumber() {
 }
 
 // GET all invoices
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { status, search } = req.query;
     let query = `
@@ -41,14 +41,14 @@ router.get('/', (req, res) => {
     }
 
     if (search) {
-      query += ` AND (inv.invoice_number LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR t.ticket_number LIKE ?)`;
+      query += ` AND (inv.invoice_number ILIKE ? OR c.name ILIKE ? OR c.phone ILIKE ? OR t.ticket_number ILIKE ?)`;
       const s = `%${search}%`;
       params.push(s, s, s, s);
     }
 
     query += ` ORDER BY inv.created_at DESC`;
 
-    const invoices = db.prepare(query).all(...params);
+    const invoices = await db.prepare(query).all(...params);
     res.json(invoices);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -56,9 +56,9 @@ router.get('/', (req, res) => {
 });
 
 // GET single invoice with complete print data & shop settings
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const invoice = db.prepare(`
+    const invoice = await db.prepare(`
       SELECT 
         inv.*,
         c.name as customer_name,
@@ -83,12 +83,12 @@ router.get('/:id', (req, res) => {
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
     // Fetch itemized parts attached to this ticket
-    const parts = db.prepare(`
+    const parts = await db.prepare(`
       SELECT * FROM ticket_parts WHERE ticket_id = ?
     `).all(invoice.ticket_id);
 
     // Fetch shop settings
-    const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
+    const settings = await db.prepare('SELECT * FROM settings WHERE id = 1').get();
 
     res.json({
       ...invoice,
@@ -101,7 +101,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST generate invoice for a ticket (Bug 2.1 & Bug 2.3 fixes)
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       ticket_id,
@@ -118,11 +118,11 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Valid ticket_id is required' });
     }
 
-    const ticket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(ticketId);
+    const ticket = await db.prepare('SELECT * FROM tickets WHERE id = ?').get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
     // Bug 2.3 fix: Check for existing invoice for this repair ticket
-    const existingInvoice = db.prepare('SELECT id, invoice_number, grand_total, payment_status FROM invoices WHERE ticket_id = ?').get(ticketId);
+    const existingInvoice = await db.prepare('SELECT id, invoice_number, grand_total, payment_status FROM invoices WHERE ticket_id = ?').get(ticketId);
     if (existingInvoice) {
       return res.status(409).json({
         error: `An invoice (${existingInvoice.invoice_number}) already exists for this repair ticket.`,
@@ -150,11 +150,11 @@ router.post('/', (req, res) => {
     }
 
     // Calculate total from parts
-    const partsSum = db.prepare(`
+    const partsSum = await db.prepare(`
       SELECT COALESCE(SUM(total_price), 0) as total FROM ticket_parts WHERE ticket_id = ?
     `).get(ticketId);
 
-    const parts_total = Math.round(Number(partsSum.total || 0) * 100) / 100;
+    const parts_total = Math.round(Number(partsSum ? partsSum.total : 0) * 100) / 100;
     const subtotal = Math.round((parts_total + labor) * 100) / 100;
     const tax_amount = Math.round(((subtotal * taxRate) / 100) * 100) / 100;
     const grand_total = Math.max(0, Math.round((subtotal + tax_amount - disc) * 100) / 100);
@@ -170,14 +170,14 @@ router.post('/', (req, res) => {
       payment_status = 'Partial';
     }
 
-    const invoice_number = getNextInvoiceNumber();
+    const invoice_number = await getNextInvoiceNumber();
 
-    const insert = db.prepare(`
+    const insert = await db.prepare(`
       INSERT INTO invoices (
         invoice_number, ticket_id, customer_id, labor_charges, parts_total, subtotal,
         tax_rate, tax_amount, discount, grand_total, advance_deducted, amount_paid,
         balance_due, payment_method, payment_status, notes, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(
       invoice_number,
       ticketId,
@@ -200,9 +200,9 @@ router.post('/', (req, res) => {
     const invoiceId = insert.lastInsertRowid;
 
     // Log timeline on ticket
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Invoice Generated', ?, 'Billing', datetime('now', 'localtime'))
+      VALUES (?, 'Invoice Generated', ?, 'Billing', CURRENT_TIMESTAMP)
     `).run(ticketId, `Invoice ${invoice_number} generated for ₹${grand_total.toLocaleString()}. Status: ${payment_status}`);
 
     res.status(201).json({
@@ -218,7 +218,7 @@ router.post('/', (req, res) => {
 });
 
 // POST record payment on an invoice (Bug 2.1 fix)
-router.post('/:id/payment', (req, res) => {
+router.post('/:id/payment', async (req, res) => {
   try {
     const invoiceId = parseInt(req.params.id, 10);
     if (isNaN(invoiceId) || invoiceId <= 0) {
@@ -233,33 +233,33 @@ router.post('/:id/payment', (req, res) => {
       return res.status(400).json({ error: 'Valid positive payment amount required' });
     }
 
-    const inv = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
+    const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
     if (!inv) return res.status(404).json({ error: 'Invoice not found' });
 
-    if (inv.balance_due <= 0) {
+    if (Number(inv.balance_due) <= 0) {
       return res.status(400).json({ error: 'Invoice is already fully paid' });
     }
 
-    if (payAmount > inv.balance_due + 0.01) {
+    if (payAmount > Number(inv.balance_due) + 0.01) {
       return res.status(400).json({
         error: `Payment amount (₹${payAmount}) exceeds remaining balance due (₹${inv.balance_due})`
       });
     }
 
-    const newAmountPaid = Math.round((inv.amount_paid + payAmount) * 100) / 100;
-    const newBalance = Math.max(0, Math.round((inv.grand_total - newAmountPaid) * 100) / 100);
+    const newAmountPaid = Math.round((Number(inv.amount_paid) + payAmount) * 100) / 100;
+    const newBalance = Math.max(0, Math.round((Number(inv.grand_total) - newAmountPaid) * 100) / 100);
     const newStatus = newBalance <= 0.01 ? 'Paid' : 'Partial';
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE invoices 
       SET amount_paid = ?, balance_due = ?, payment_status = ?, payment_method = COALESCE(?, payment_method)
       WHERE id = ?
     `).run(newAmountPaid, newBalance, newStatus, payment_method, invoiceId);
 
     // Timeline on ticket
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Payment Received', ?, 'Cashier', datetime('now', 'localtime'))
+      VALUES (?, 'Payment Received', ?, 'Cashier', CURRENT_TIMESTAMP)
     `).run(inv.ticket_id, `Payment of ₹${payAmount.toLocaleString()} received via ${payment_method || 'Cash'}. Remaining balance: ₹${newBalance.toLocaleString()}`);
 
     res.json({

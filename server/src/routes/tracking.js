@@ -56,7 +56,7 @@ function maskPhone(phone) {
 }
 
 // GET public ticket tracking info (Rate-limited & PII-masked)
-router.get('/:identifier', trackingRateLimiter, (req, res) => {
+router.get('/:identifier', trackingRateLimiter, async (req, res) => {
   try {
     const { identifier } = req.params;
     const cleanId = (identifier || '').trim();
@@ -72,7 +72,7 @@ router.get('/:identifier', trackingRateLimiter, (req, res) => {
     }
 
     // Check if identifier is ticket number or phone
-    let ticket = db.prepare(`
+    let ticket = await db.prepare(`
       SELECT 
         t.id,
         t.ticket_number,
@@ -101,7 +101,7 @@ router.get('/:identifier', trackingRateLimiter, (req, res) => {
     }
 
     // Get public timeline milestones
-    const timeline = db.prepare(`
+    const timeline = await db.prepare(`
       SELECT action, description, created_at
       FROM timeline_logs
       WHERE ticket_id = ?
@@ -109,7 +109,7 @@ router.get('/:identifier', trackingRateLimiter, (req, res) => {
     `).all(ticket.id);
 
     // Get shop contact details
-    const settings = db.prepare(`
+    const settings = await db.prepare(`
       SELECT shop_name, shop_phone, shop_email, shop_address
       FROM settings WHERE id = 1
     `).get();

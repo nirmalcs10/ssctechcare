@@ -20,15 +20,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Install build dependencies (python3, g++, make) and curl for healthcheck
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    make \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install curl for container healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Copy root dependencies and install production modules
+# Copy root dependencies and install production modules (pure JS pg, no build tools needed)
 COPY package*.json ./
 RUN npm install --omit=dev
 
@@ -37,9 +32,6 @@ COPY server ./server
 
 # Copy built frontend from build stage
 COPY --from=build /app/client/dist ./client/dist
-
-# Ensure database directory exists
-RUN mkdir -p /app/server/data
 
 # Expose server port
 EXPOSE 5000

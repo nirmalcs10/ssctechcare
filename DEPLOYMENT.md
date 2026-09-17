@@ -1,133 +1,121 @@
-# How to Run SSC TechCare on an Online Server
+# How to Run SSC TechCare on an Online Server (PostgreSQL Edition)
 
-This guide provides step-by-step instructions to deploy the **Computer Service Center Management Application** online so that your staff, front desk, hardware technicians, and customers can access it securely from any device or mobile phone.
+This guide provides step-by-step instructions to deploy the **SSC TechCare Computer Service Center Management Application** online with **PostgreSQL**, so your staff, front desk, hardware technicians, and customers can access it securely from any device or mobile phone.
 
 ---
 
 ## 🌟 Architecture Summary
 
-The application is structured so that the Express server serves both the **REST API (`/api/...`)** and the **compiled React Frontend single-page app** from a single port (`PORT` environment variable or `5000`).
-
-- **Database**: Embedded SQLite file stored at `server/data/service_center.db`.
-- **Single Process**: You only need to run `npm start` to serve the complete application!
+The application is structured as a modern full-stack Node.js application:
+- **Frontend**: React + Vite + Tailwind CSS single page application (SPA).
+- **Backend**: Express REST API (`/api/...`) serving both the backend endpoints and compiled frontend assets from a single port (`PORT` environment variable or `5000`).
+- **Database**: **PostgreSQL** database connected through connection pool (`pg`) via `DATABASE_URL`.
+- **Pure JavaScript**: No native C++ compilation or `node-gyp` dependencies required!
 
 ---
 
-## Method 1: Deploy on Render.com (Recommended / Zero Server Setup)
+## Method 1: Deploy on Render.com with Managed PostgreSQL (Recommended)
 
-Render offers free/low-cost managed web hosting with automated deployments directly from GitHub.
+Render offers managed web hosting with free/low-cost PostgreSQL databases.
 
-### Steps:
-1. **Push your code to GitHub**:
-   - Create a repository (e.g. `ssc-service-center`) on [github.com](https://github.com).
-   - Push your code to the repository.
+### 1-Click Blueprint Deployment:
+1. Push your repository to GitHub.
+2. Log in to [dashboard.render.com](https://dashboard.render.com).
+3. Click **New +** ➔ **Blueprint**.
+4. Select your `ssctechcare` repository.
+5. Render automatically detects [`render.yaml`](./render.yaml), provisions both the **Web Service** and **PostgreSQL Database (`ssc-postgres`)**, and links `DATABASE_URL` automatically!
+6. Click **Apply**.
+7. In ~2 minutes, your live HTTPS URL will be active!
 
-2. **Create a Web Service on Render**:
-   - Go to [render.com](https://render.com) and log in.
-   - Click **New +** ➔ **Web Service**.
-   - Connect your GitHub repository.
+---
 
-3. **Configure the Web Service**:
-   - **Name**: `ssc-service-center`
-   - **Environment**: `Node`
-   - **Build Command**:
-     ```bash
-     npm install && npm run build
+## Method 2: Deploy with Free Cloud PostgreSQL (Supabase / Neon / Aiven)
+
+You can host PostgreSQL for free on specialized cloud providers (Supabase or Neon) and connect from Render, Railway, or Vercel.
+
+1. **Create Free Database**:
+   - Go to [neon.tech](https://neon.tech) or [supabase.com](https://supabase.com) and create a free project.
+   - Copy your PostgreSQL connection string:
      ```
-   - **Start Command**:
-     ```bash
-     npm start
+     postgresql://username:password@ep-xyz.region.aws.neon.tech/neondb?sslmode=require
      ```
-   - **Plan**: Free or Starter.
-
-4. **Add Persistent Disk (Crucial for SQLite Database)**:
-   - In the service settings, scroll to **Disks**.
-   - Click **Add Disk**:
-     - **Name**: `sqlite-data`
-     - **Mount Path**: `/opt/render/project/src/server/data`
-     - **Size**: `1 GB` (or more)
-   *(This ensures your repair tickets, invoices, and customer database persist across server restarts and redeployments).*
-
-5. **Deploy**:
-   - Click **Create Web Service**.
-   - Render will build the app and give you a free live URL: `https://ssc-service-center.onrender.com`.
+2. **Set Environment Variable on Web Host**:
+   - `DATABASE_URL`: your connection string
+   - `DATABASE_SSL`: `true`
+3. Deploy your web service with `npm install && npm run build` and `npm start`.
 
 ---
 
-## Method 2: Deploy on Railway.app
+## Method 3: Deploy using Docker & Docker Compose (Includes PostgreSQL Container)
 
-Railway provides ultra-fast 1-click deployments with built-in persistent storage.
+If deploying to a VPS (DigitalOcean, AWS EC2, Linode) or local server with Docker:
 
-### Steps:
-1. Go to [railway.app](https://railway.app) and sign in with GitHub.
-2. Click **New Project** ➔ **Deploy from GitHub repo**.
-3. Select your repository.
-4. Add a Persistent Volume:
-   - Go to your service's **Settings** ➔ **Volumes** ➔ **Add Volume**.
-   - Set the mount path to: `/app/server/data`.
-5. Railway will automatically detect Node.js, run `npm install`, build the client, and start the server.
-6. Under **Networking**, click **Generate Domain** to get a public URL (e.g. `ssc-production.up.railway.app`).
+1. Clone the repository onto your server:
+   ```bash
+   git clone https://github.com/nirmalcs10/ssctechcare.git
+   cd ssctechcare
+   ```
+
+2. Start the application and PostgreSQL in detached mode:
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. Docker Compose automatically:
+   - Starts a `postgres:16-alpine` container with a healthcheck.
+   - Persists data in the `ssc_pgdata` Docker volume.
+   - Builds the web app and links `DATABASE_URL=postgresql://ssc_user:ssc_password@postgres:5432/ssctechcare`.
+   - Exposes the service on port `5000`.
+
+4. Check status:
+   ```bash
+   docker compose ps
+   docker compose logs -f
+   ```
 
 ---
 
-## Method 3: Deploy on a Linux Cloud VPS (Ubuntu / Debian on DigitalOcean, AWS EC2, Linode)
+## Method 4: Deploy on a Linux Cloud VPS with Local PostgreSQL
 
-If you have your own VPS ($4-$6/month), you have full control over performance and backups.
-
-### 1. Connect to your VPS:
+### 1. Install Node.js 22 & PostgreSQL:
 ```bash
-ssh root@your-server-ip
-```
-
-### 2. Install Node.js & Git:
-```bash
-# Update package list
 sudo apt update && sudo apt upgrade -y
-
-# Install Node.js 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs git build-essential nginx
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs git postgresql postgresql-contrib nginx
 ```
 
-### 3. Clone and Build the Application:
+### 2. Configure PostgreSQL:
+```bash
+sudo -u postgres psql -c "CREATE USER ssc_user WITH PASSWORD 'StrongPassword123';"
+sudo -u postgres psql -c "CREATE DATABASE ssctechcare OWNER ssc_user;"
+```
+
+### 3. Clone and Build:
 ```bash
 cd /var/www
-git clone https://github.com/your-username/ssc-service-center.git
-cd ssc-service-center
+git clone https://github.com/nirmalcs10/ssctechcare.git
+cd ssctechcare
 
-# Install dependencies and build client bundle
 npm install
 npm run build
 
-# Seed initial database (optional if starting fresh)
-npm run seed
+# Set DATABASE_URL in .env
+echo "DATABASE_URL=postgresql://ssc_user:StrongPassword123@localhost:5432/ssctechcare" > .env
 ```
 
-### 4. Install PM2 Process Manager (Keeps app running 24/7):
+### 4. Run with PM2:
 ```bash
 sudo npm install -g pm2
-
-# Start the application
 pm2 start server/src/server.js --name "ssc-techcare"
-
-# Configure PM2 to auto-start on server reboot
 pm2 startup
 pm2 save
 ```
 
-### 5. Configure Nginx Reverse Proxy with Domain & Free SSL:
-Create Nginx configuration:
-```bash
-sudo nano /etc/nginx/sites-available/servicecenter.conf
-```
-
-Paste the following (replace `yourdomain.com` with your actual domain):
+### 5. Configure Nginx Reverse Proxy with Free SSL:
 ```nginx
 server {
     listen 80;
-    server_name yourdomain.com www.yourdomain.com;
-
-    client_max_body_size 50M;
+    server_name yourdomain.com;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
@@ -136,75 +124,22 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 ```
-
-Enable the site and restart Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/servicecenter.conf /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-### 6. Install Free Let's Encrypt SSL (HTTPS):
+Install Let's Encrypt SSL:
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+sudo certbot --nginx -d yourdomain.com
 ```
-Your application is now securely live at `https://yourdomain.com`!
 
 ---
 
-## Method 4: Deploy using Docker & Docker Compose
+## 🔒 Default Logins
 
-If your server has Docker installed:
-
-1. Clone the repository onto your server:
-   ```bash
-   git clone <repo_url>
-   cd ssc-service-center
-   ```
-
-2. Start the container in detached mode:
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. View status and logs:
-   ```bash
-   docker compose ps
-   docker compose logs -f
-   ```
-
-The container automatically persists your database in the `ssc_data` volume and exposes the application on port `5000`.
-
----
-
-## Method 5: Run on the Workshop's Main PC & Access Online (Cloudflare Tunnel - 100% Free)
-
-If you do **NOT** want to pay for cloud hosting and prefer running the database locally on the service center shop's main computer, you can use **Cloudflare Tunnel** to access it anywhere for free.
-
-1. Start the server on your shop PC:
-   ```powershell
-   npm run build
-   npm start
-   ```
-
-2. Download and run Cloudflare's free CLI tool ([cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)):
-   ```powershell
-   cloudflared tunnel --url http://localhost:5000
-   ```
-
-3. Cloudflare will generate a secure public HTTPS URL (e.g. `https://random-words.trycloudflare.com`).
-4. Share this URL with your technicians or customers to track their device repairs live!
-
----
-
-## 🔒 Production Security Checklist
-
-- [ ] **Data Backup**: Regularly back up `server/data/service_center.db` (e.g. daily cron job syncing to Google Drive, AWS S3, or an external USB drive).
-- [ ] **HTTPS / SSL**: Ensure SSL is enabled so passwords and customer contact information are encrypted over the web.
-- [ ] **Firewall**: Only expose ports 80 and 443; keep port 5000 internal behind the reverse proxy.
+| Portal | Username / Email | Password |
+| :--- | :--- | :--- |
+| **Master Gateway** | `admin@ssctechcare.com` | `admin123` |
+| **Admin Staff** | `admin` | `admin123` |
+| **Lead Technician** | `tech` | `tech123` |
+| **Front Desk** | `staff` | `staff123` |

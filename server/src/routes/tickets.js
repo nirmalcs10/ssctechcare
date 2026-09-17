@@ -3,8 +3,8 @@ const router = express.Router();
 const db = require('../db/database');
 
 // Helper to generate next ticket number: REP-2026-000X
-function getNextTicketNumber() {
-  const row = db.prepare(`
+async function getNextTicketNumber() {
+  const row = await db.prepare(`
     SELECT ticket_number FROM tickets 
     ORDER BY id DESC LIMIT 1
   `).get();
@@ -23,7 +23,7 @@ function getNextTicketNumber() {
 }
 
 // GET all tickets with filtering & search
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { status, priority, technician_id, search } = req.query;
     let query = `
@@ -56,12 +56,12 @@ router.get('/', (req, res) => {
     }
     if (search) {
       query += ` AND (
-        t.ticket_number LIKE ? OR 
-        c.name LIKE ? OR 
-        c.phone LIKE ? OR 
-        t.model LIKE ? OR 
-        t.brand LIKE ? OR
-        t.serial_number LIKE ?
+        t.ticket_number ILIKE ? OR 
+        c.name ILIKE ? OR 
+        c.phone ILIKE ? OR 
+        t.model ILIKE ? OR 
+        t.brand ILIKE ? OR
+        t.serial_number ILIKE ?
       )`;
       const s = `%${search}%`;
       params.push(s, s, s, s, s, s);
@@ -69,7 +69,7 @@ router.get('/', (req, res) => {
 
     query += ` ORDER BY t.created_at DESC`;
 
-    const tickets = db.prepare(query).all(...params);
+    const tickets = await db.prepare(query).all(...params);
     res.json(tickets);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -77,9 +77,9 @@ router.get('/', (req, res) => {
 });
 
 // GET single ticket by ID
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const ticket = db.prepare(`
+    const ticket = await db.prepare(`
       SELECT 
         t.*,
         c.name as customer_name,
@@ -101,13 +101,13 @@ router.get('/:id', (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    // Parse JSON fields safely
-    ticket.accessories = ticket.accessories ? JSON.parse(ticket.accessories) : [];
-    ticket.physical_condition = ticket.physical_condition ? JSON.parse(ticket.physical_condition) : [];
-    ticket.inspection_checklist = ticket.inspection_checklist ? JSON.parse(ticket.inspection_checklist) : {};
+    // Parse JSON fields safely if string
+    ticket.accessories = typeof ticket.accessories === 'string' ? JSON.parse(ticket.accessories) : (ticket.accessories || []);
+    ticket.physical_condition = typeof ticket.physical_condition === 'string' ? JSON.parse(ticket.physical_condition) : (ticket.physical_condition || []);
+    ticket.inspection_checklist = typeof ticket.inspection_checklist === 'string' ? JSON.parse(ticket.inspection_checklist) : (ticket.inspection_checklist || {});
 
     // Get parts used
-    const parts = db.prepare(`
+    const parts = await db.prepare(`
       SELECT tp.*, i.sku, i.category
       FROM ticket_parts tp
       LEFT JOIN inventory i ON tp.inventory_id = i.id
@@ -116,14 +116,14 @@ router.get('/:id', (req, res) => {
     `).all(req.params.id);
 
     // Get timeline logs
-    const timeline = db.prepare(`
+    const timeline = await db.prepare(`
       SELECT * FROM timeline_logs 
       WHERE ticket_id = ?
       ORDER BY created_at DESC
     `).all(req.params.id);
 
     // Check for existing invoice
-    const invoice = db.prepare(`
+    const invoice = await db.prepare(`
       SELECT * FROM invoices WHERE ticket_id = ? ORDER BY id DESC LIMIT 1
     `).get(req.params.id);
 
@@ -139,7 +139,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST create new repair ticket
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       customer_id,
@@ -167,11 +167,11 @@ router.post('/', (req, res) => {
 
     // Auto-create or lookup customer by phone if customer_id not provided
     if (!targetCustomerId && customer_phone) {
-      let existingCustomer = db.prepare('SELECT id FROM customers WHERE phone = ?').get(customer_phone);
+      let existingCustomer = await db.prepare('SELECT id FROM customers WHERE phone = ?').get(customer_phone);
       if (!existingCustomer) {
-        const createCust = db.prepare(`
+        const createCust = await db.prepare(`
           INSERT INTO customers (name, phone, email, address, created_at)
-          VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         `).run(customer_name || 'Walk-in Customer', customer_phone, customer_email || '', customer_address || '');
         targetCustomerId = createCust.lastInsertRowid;
       } else {
@@ -183,15 +183,15 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Customer information is required' });
     }
 
-    const ticket_number = getNextTicketNumber();
+    const ticket_number = await getNextTicketNumber();
 
-    const insert = db.prepare(`
+    const insert = await db.prepare(`
       INSERT INTO tickets (
         ticket_number, customer_id, device_type, brand, model, serial_number, device_password,
         accessories, physical_condition, inspection_checklist, problem_description,
         priority, status, technician_id, estimated_cost, estimated_delivery, advance_paid,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `).run(
       ticket_number,
       targetCustomerId,
@@ -214,16 +214,16 @@ router.post('/', (req, res) => {
     const ticketId = insert.lastInsertRowid;
 
     // Log timeline
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Ticket Created', ?, 'Front Desk', datetime('now', 'localtime'))
+      VALUES (?, 'Ticket Created', ?, 'Front Desk', CURRENT_TIMESTAMP)
     `).run(ticketId, `Job card created for ${brand} ${model}. Reported issue: ${problem_description}`);
 
     if (technician_id) {
-      const tech = db.prepare('SELECT name FROM technicians WHERE id = ?').get(technician_id);
-      db.prepare(`
+      const tech = await db.prepare('SELECT name FROM technicians WHERE id = ?').get(technician_id);
+      await db.prepare(`
         INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-        VALUES (?, 'Assigned', ?, 'System', datetime('now', 'localtime'))
+        VALUES (?, 'Assigned', ?, 'System', CURRENT_TIMESTAMP)
       `).run(ticketId, `Assigned to ${tech ? tech.name : 'Technician'}`);
     }
 
@@ -238,7 +238,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT update ticket info & diagnosis
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const {
       device_type,
@@ -261,7 +261,7 @@ router.put('/:id', (req, res) => {
       advance_paid
     } = req.body;
 
-    const oldTicket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
+    const oldTicket = await db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
     if (!oldTicket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
@@ -270,7 +270,7 @@ router.put('/:id', (req, res) => {
       ? (req.body.technician_id === '' || req.body.technician_id === null ? null : parseInt(req.body.technician_id, 10))
       : oldTicket.technician_id;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE tickets SET
         device_type = COALESCE(?, device_type),
         brand = COALESCE(?, brand),
@@ -290,7 +290,7 @@ router.put('/:id', (req, res) => {
         estimated_delivery = COALESCE(?, estimated_delivery),
         customer_approved = COALESCE(?, customer_approved),
         advance_paid = COALESCE(?, advance_paid),
-        updated_at = datetime('now', 'localtime')
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
       device_type,
@@ -316,22 +316,22 @@ router.put('/:id', (req, res) => {
 
     // If technician changed, record in timeline
     if (req.body.technician_id !== undefined && targetTechId !== oldTicket.technician_id) {
-      const newTech = targetTechId ? db.prepare('SELECT name FROM technicians WHERE id = ?').get(targetTechId) : null;
-      db.prepare(`
+      const newTech = targetTechId ? await db.prepare('SELECT name FROM technicians WHERE id = ?').get(targetTechId) : null;
+      await db.prepare(`
         INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-        VALUES (?, 'Technician Reassigned', ?, 'Staff', datetime('now', 'localtime'))
+        VALUES (?, 'Technician Reassigned', ?, 'Staff', CURRENT_TIMESTAMP)
       `).run(req.params.id, newTech ? `Reassigned to ${newTech.name}` : 'Unassigned from technician');
     }
 
     // If status changed, record in timeline
     if (status && status !== oldTicket.status) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-        VALUES (?, 'Status Changed', ?, 'Staff', datetime('now', 'localtime'))
+        VALUES (?, 'Status Changed', ?, 'Staff', CURRENT_TIMESTAMP)
       `).run(req.params.id, `Status updated from ${oldTicket.status} to ${status}`);
 
       if (status === 'DELIVERED') {
-        db.prepare("UPDATE tickets SET delivered_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
+        await db.prepare("UPDATE tickets SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(req.params.id);
       }
     }
 
@@ -342,22 +342,22 @@ router.put('/:id', (req, res) => {
 });
 
 // POST change status directly
-router.post('/:id/status', (req, res) => {
+router.post('/:id/status', async (req, res) => {
   try {
     const { status, note, actor } = req.body;
-    const ticket = db.prepare('SELECT status FROM tickets WHERE id = ?').get(req.params.id);
+    const ticket = await db.prepare('SELECT status FROM tickets WHERE id = ?').get(req.params.id);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE tickets 
-      SET status = ?, updated_at = datetime('now', 'localtime') ${status === 'DELIVERED' ? ", delivered_at = datetime('now', 'localtime')" : ''}
+      SET status = ?, updated_at = CURRENT_TIMESTAMP ${status === 'DELIVERED' ? ", delivered_at = CURRENT_TIMESTAMP" : ''}
       WHERE id = ?
     `).run(status, req.params.id);
 
     const desc = note ? `Status changed to ${status}: ${note}` : `Status changed from ${ticket.status} to ${status}`;
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Status Changed', ?, ?, datetime('now', 'localtime'))
+      VALUES (?, 'Status Changed', ?, ?, CURRENT_TIMESTAMP)
     `).run(req.params.id, desc, actor || 'Staff');
 
     res.json({ message: 'Status updated successfully', status });
@@ -367,14 +367,14 @@ router.post('/:id/status', (req, res) => {
 });
 
 // POST attach spare part to ticket (auto-deducts inventory - Bug 2.2 fix)
-router.post('/:id/parts', (req, res) => {
+router.post('/:id/parts', async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id, 10);
     if (isNaN(ticketId) || ticketId <= 0) {
       return res.status(400).json({ error: 'Valid ticket ID is required' });
     }
 
-    const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
+    const ticket = await db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
     const { inventory_id, part_name, quantity, unit_price } = req.body;
@@ -400,24 +400,24 @@ router.post('/:id/parts', (req, res) => {
     // Check inventory if inventory_id provided
     const invId = inventory_id ? parseInt(inventory_id, 10) : null;
     if (invId) {
-      const item = db.prepare('SELECT * FROM inventory WHERE id = ?').get(invId);
+      const item = await db.prepare('SELECT * FROM inventory WHERE id = ?').get(invId);
       if (!item) return res.status(404).json({ error: 'Inventory item not found' });
       if (item.stock_quantity < qty) {
         return res.status(400).json({ error: `Insufficient stock for ${item.name}. Available: ${item.stock_quantity}` });
       }
 
       // Deduct inventory
-      db.prepare('UPDATE inventory SET stock_quantity = stock_quantity - ? WHERE id = ?').run(qty, invId);
+      await db.prepare('UPDATE inventory SET stock_quantity = stock_quantity - ? WHERE id = ?').run(qty, invId);
     }
 
-    const insertPart = db.prepare(`
+    const insertPart = await db.prepare(`
       INSERT INTO ticket_parts (ticket_id, inventory_id, part_name, quantity, unit_price, total_price, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(ticketId, invId || null, part_name.trim(), qty, price, totalPrice);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Part Added', ?, 'Technician', datetime('now', 'localtime'))
+      VALUES (?, 'Part Added', ?, 'Technician', CURRENT_TIMESTAMP)
     `).run(ticketId, `Installed ${qty}x ${part_name.trim()} (₹${totalPrice.toLocaleString()})`);
 
     res.status(201).json({ id: insertPart.lastInsertRowid, message: 'Part added to repair ticket' });
@@ -427,20 +427,20 @@ router.post('/:id/parts', (req, res) => {
 });
 
 // DELETE remove spare part (restores inventory stock)
-router.delete('/:id/parts/:partId', (req, res) => {
+router.delete('/:id/parts/:partId', async (req, res) => {
   try {
-    const part = db.prepare('SELECT * FROM ticket_parts WHERE id = ? AND ticket_id = ?').get(req.params.partId, req.params.id);
+    const part = await db.prepare('SELECT * FROM ticket_parts WHERE id = ? AND ticket_id = ?').get(req.params.partId, req.params.id);
     if (!part) return res.status(404).json({ error: 'Part record not found' });
 
     if (part.inventory_id) {
-      db.prepare('UPDATE inventory SET stock_quantity = stock_quantity + ? WHERE id = ?').run(part.quantity, part.inventory_id);
+      await db.prepare('UPDATE inventory SET stock_quantity = stock_quantity + ? WHERE id = ?').run(part.quantity, part.inventory_id);
     }
 
-    db.prepare('DELETE FROM ticket_parts WHERE id = ?').run(req.params.partId);
+    await db.prepare('DELETE FROM ticket_parts WHERE id = ?').run(req.params.partId);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Part Removed', ?, 'Technician', datetime('now', 'localtime'))
+      VALUES (?, 'Part Removed', ?, 'Technician', CURRENT_TIMESTAMP)
     `).run(req.params.id, `Removed part: ${part.part_name}`);
 
     res.json({ message: 'Part removed and inventory restored' });
@@ -450,12 +450,12 @@ router.delete('/:id/parts/:partId', (req, res) => {
 });
 
 // POST add manual timeline log
-router.post('/:id/timeline', (req, res) => {
+router.post('/:id/timeline', async (req, res) => {
   try {
     const { action, description, actor } = req.body;
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(req.params.id, action || 'Note', description, actor || 'Technician');
 
     res.status(201).json({ message: 'Timeline note added' });

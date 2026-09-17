@@ -4,7 +4,7 @@ const db = require('../db/database');
 const { requireRole } = require('./auth');
 
 // GET all inventory items with optional search & filter
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { category, search, low_stock } = req.query;
     let query = 'SELECT * FROM inventory WHERE 1=1';
@@ -20,14 +20,14 @@ router.get('/', (req, res) => {
     }
 
     if (search) {
-      query += ' AND (sku LIKE ? OR name LIKE ? OR brand_compat LIKE ? OR location LIKE ?)';
+      query += ' AND (sku ILIKE ? OR name ILIKE ? OR brand_compat ILIKE ? OR location ILIKE ?)';
       const s = `%${search}%`;
       params.push(s, s, s, s);
     }
 
     query += ' ORDER BY category ASC, name ASC';
 
-    const items = db.prepare(query).all(...params);
+    const items = await db.prepare(query).all(...params);
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -35,9 +35,9 @@ router.get('/', (req, res) => {
 });
 
 // GET categories list
-router.get('/categories', (req, res) => {
+router.get('/categories', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT DISTINCT category FROM inventory ORDER BY category ASC').all();
+    const rows = await db.prepare('SELECT DISTINCT category FROM inventory ORDER BY category ASC').all();
     res.json(rows.map(r => r.category));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -45,12 +45,12 @@ router.get('/categories', (req, res) => {
 });
 
 // GET single inventory item with usage in repair tickets
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const item = db.prepare('SELECT * FROM inventory WHERE id = ?').get(req.params.id);
+    const item = await db.prepare('SELECT * FROM inventory WHERE id = ?').get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    const usages = db.prepare(`
+    const usages = await db.prepare(`
       SELECT tp.*, t.ticket_number, t.brand, t.model, c.name as customer_name
       FROM ticket_parts tp
       JOIN tickets t ON tp.ticket_id = t.id
@@ -67,7 +67,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST add new inventory item
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
 
@@ -75,14 +75,14 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'SKU, Name, and Category are required' });
     }
 
-    const existing = db.prepare('SELECT id FROM inventory WHERE sku = ?').get(sku);
+    const existing = await db.prepare('SELECT id FROM inventory WHERE sku = ?').get(sku);
     if (existing) {
       return res.status(400).json({ error: `Part with SKU "${sku}" already exists` });
     }
 
-    const insert = db.prepare(`
+    const insert = await db.prepare(`
       INSERT INTO inventory (sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(
       sku,
       name,
@@ -102,11 +102,11 @@ router.post('/', (req, res) => {
 });
 
 // PUT update inventory item
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE inventory SET
         sku = COALESCE(?, sku),
         name = COALESCE(?, name),
@@ -127,19 +127,19 @@ router.put('/:id', (req, res) => {
 });
 
 // POST adjust stock
-router.post('/:id/stock', (req, res) => {
+router.post('/:id/stock', async (req, res) => {
   try {
-    const { change, reason } = req.body; // change can be positive or negative
+    const { change, reason } = req.body;
     const num = parseInt(change, 10);
     if (isNaN(num) || num === 0) return res.status(400).json({ error: 'Valid quantity change required' });
 
-    const item = db.prepare('SELECT stock_quantity FROM inventory WHERE id = ?').get(req.params.id);
+    const item = await db.prepare('SELECT stock_quantity FROM inventory WHERE id = ?').get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
     const newQty = item.stock_quantity + num;
     if (newQty < 0) return res.status(400).json({ error: 'Stock cannot fall below zero' });
 
-    db.prepare('UPDATE inventory SET stock_quantity = ? WHERE id = ?').run(newQty, req.params.id);
+    await db.prepare('UPDATE inventory SET stock_quantity = ? WHERE id = ?').run(newQty, req.params.id);
 
     res.json({ message: `Stock adjusted by ${num > 0 ? '+' + num : num}`, new_stock: newQty });
   } catch (error) {
@@ -148,14 +148,14 @@ router.post('/:id/stock', (req, res) => {
 });
 
 // DELETE inventory item (Admin only)
-router.delete('/:id', requireRole('admin'), (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
-    const usage = db.prepare('SELECT COUNT(*) as count FROM ticket_parts WHERE inventory_id = ?').get(req.params.id);
-    if (usage.count > 0) {
+    const usage = await db.prepare('SELECT COUNT(*) as count FROM ticket_parts WHERE inventory_id = ?').get(req.params.id);
+    if (usage && parseInt(usage.count, 10) > 0) {
       return res.status(400).json({ error: 'Cannot delete part that has been used in repair tickets' });
     }
 
-    db.prepare('DELETE FROM inventory WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM inventory WHERE id = ?').run(req.params.id);
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });

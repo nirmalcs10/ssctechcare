@@ -4,20 +4,20 @@ const db = require('../db/database');
 const { requireRole } = require('./auth');
 
 // GET all technicians with workload statistics
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const query = `
       SELECT 
-        tech.*,
+        tech.id, tech.name, tech.phone, tech.email, tech.specialization, tech.status, tech.created_at,
         COUNT(CASE WHEN t.status NOT IN ('DELIVERED', 'CANCELLED') THEN 1 END) as active_jobs,
         COUNT(CASE WHEN t.status = 'DELIVERED' THEN 1 END) as completed_jobs,
         COUNT(t.id) as total_jobs
       FROM technicians tech
       LEFT JOIN tickets t ON tech.id = t.technician_id
-      GROUP BY tech.id
+      GROUP BY tech.id, tech.name, tech.phone, tech.email, tech.specialization, tech.status, tech.created_at
       ORDER BY tech.name ASC
     `;
-    const technicians = db.prepare(query).all();
+    const technicians = await db.prepare(query).all();
     res.json(technicians);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -25,14 +25,14 @@ router.get('/', (req, res) => {
 });
 
 // POST add new technician (Admin only)
-router.post('/', requireRole('admin'), (req, res) => {
+router.post('/', requireRole('admin'), async (req, res) => {
   try {
     const { name, phone, email, specialization, status } = req.body;
     if (!name) return res.status(400).json({ error: 'Technician name is required' });
 
-    const insert = db.prepare(`
+    const insert = await db.prepare(`
       INSERT INTO technicians (name, phone, email, specialization, status, created_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(name, phone || '', email || '', specialization || 'General Hardware', status || 'Active');
 
     res.status(201).json({ id: insert.lastInsertRowid, message: 'Technician added' });
@@ -42,11 +42,11 @@ router.post('/', requireRole('admin'), (req, res) => {
 });
 
 // PUT update technician (Admin only)
-router.put('/:id', requireRole('admin'), (req, res) => {
+router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { name, phone, email, specialization, status } = req.body;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE technicians SET
         name = COALESCE(?, name),
         phone = COALESCE(?, phone),
@@ -63,25 +63,24 @@ router.put('/:id', requireRole('admin'), (req, res) => {
 });
 
 // DELETE delete technician (Admin only)
-router.delete('/:id', requireRole('admin'), (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const techId = parseInt(req.params.id, 10);
-    const tech = db.prepare('SELECT * FROM technicians WHERE id = ?').get(techId);
+    const tech = await db.prepare('SELECT * FROM technicians WHERE id = ?').get(techId);
     if (!tech) {
       return res.status(404).json({ error: 'Technician not found' });
     }
 
-    const assignedCount = db.prepare('SELECT COUNT(*) as c FROM tickets WHERE technician_id = ?').get(techId).c;
+    const countRes = await db.prepare('SELECT COUNT(*) as c FROM tickets WHERE technician_id = ?').get(techId);
+    const assignedCount = countRes ? countRes.c : 0;
 
-    const deleteTx = db.transaction(() => {
+    await db.transaction(async (tx) => {
       // Safely unassign technician from existing tickets
       if (assignedCount > 0) {
-        db.prepare('UPDATE tickets SET technician_id = NULL WHERE technician_id = ?').run(techId);
+        await tx.prepare('UPDATE tickets SET technician_id = NULL WHERE technician_id = ?').run(techId);
       }
-      db.prepare('DELETE FROM technicians WHERE id = ?').run(techId);
+      await tx.prepare('DELETE FROM technicians WHERE id = ?').run(techId);
     });
-
-    deleteTx();
 
     res.json({
       success: true,
@@ -94,9 +93,9 @@ router.delete('/:id', requireRole('admin'), (req, res) => {
 });
 
 // GET tickets assigned to a technician
-router.get('/:id/tickets', (req, res) => {
+router.get('/:id/tickets', async (req, res) => {
   try {
-    const tickets = db.prepare(`
+    const tickets = await db.prepare(`
       SELECT t.*, c.name as customer_name, c.phone as customer_phone
       FROM tickets t
       JOIN customers c ON t.customer_id = c.id

@@ -3,10 +3,10 @@ const router = express.Router();
 const db = require('../db/database');
 
 // GET dashboard metrics & overview
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // 1. Status breakdown
-    const statusCounts = db.prepare(`
+    const statusCounts = await db.prepare(`
       SELECT status, COUNT(*) as count 
       FROM tickets 
       GROUP BY status
@@ -25,14 +25,15 @@ router.get('/', (req, res) => {
       CANCELLED: 0
     };
     statusCounts.forEach(r => {
-      statusMap[r.status] = r.count;
+      statusMap[r.status] = parseInt(r.count, 10) || 0;
     });
 
     // 2. Active Repairs (all except Delivered and Cancelled)
-    const activeRepairs = db.prepare(`
+    const activeRepairsRes = await db.prepare(`
       SELECT COUNT(*) as count FROM tickets 
       WHERE status NOT IN ('DELIVERED', 'CANCELLED')
-    `).get().count;
+    `).get();
+    const activeRepairs = activeRepairsRes ? parseInt(activeRepairsRes.count, 10) : 0;
 
     // 3. Ready for pickup
     const readyForPickup = statusMap.READY_FOR_PICKUP || 0;
@@ -46,18 +47,18 @@ router.get('/', (req, res) => {
     let totalPending = null;
 
     if (!isFrontDesk) {
-      const revenue = db.prepare(`
+      const revenue = await db.prepare(`
         SELECT 
           COALESCE(SUM(amount_paid), 0) as total_revenue,
           COALESCE(SUM(balance_due), 0) as total_pending
         FROM invoices
       `).get();
-      totalRevenue = revenue.total_revenue;
-      totalPending = revenue.total_pending;
+      totalRevenue = revenue ? parseFloat(revenue.total_revenue) : 0;
+      totalPending = revenue ? parseFloat(revenue.total_pending) : 0;
     }
 
     // 6. Urgent / High Priority active tickets
-    const urgentTickets = db.prepare(`
+    const urgentTickets = await db.prepare(`
       SELECT 
         t.id, t.ticket_number, t.brand, t.model, t.priority, t.status, t.estimated_delivery,
         c.name as customer_name, c.phone as customer_phone,
@@ -74,7 +75,7 @@ router.get('/', (req, res) => {
     `).all();
 
     // 7. Low stock items
-    const lowStockItems = db.prepare(`
+    const lowStockItems = await db.prepare(`
       SELECT id, sku, name, category, stock_quantity, min_threshold
       FROM inventory 
       WHERE stock_quantity <= min_threshold
@@ -82,7 +83,7 @@ router.get('/', (req, res) => {
     `).all();
 
     // 8. Device category breakdown
-    const deviceBreakdown = db.prepare(`
+    const deviceBreakdown = await db.prepare(`
       SELECT device_type, COUNT(*) as count
       FROM tickets
       GROUP BY device_type
@@ -90,7 +91,7 @@ router.get('/', (req, res) => {
     `).all();
 
     // 9. Recent activity timeline
-    const recentActivity = db.prepare(`
+    const recentActivity = await db.prepare(`
       SELECT 
         tl.*,
         t.ticket_number,

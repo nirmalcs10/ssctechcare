@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db/database');
 
 // Middleware to verify session token and attach user to request
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -15,11 +15,11 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    const session = db.prepare(`
+    const session = await db.prepare(`
       SELECT s.token, s.expires_at, u.id, u.username, u.full_name, u.role, u.is_active
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')
+      WHERE s.token = ? AND s.expires_at > NOW()
     `).get(token);
 
     if (!session || !session.is_active) {
@@ -51,18 +51,18 @@ function requireRole(...allowedRoles) {
 }
 
 // Middleware to verify master session token (Main Login gateway)
-function requireMasterAuth(req, res, next) {
+async function requireMasterAuth(req, res, next) {
   const masterToken = req.headers['x-master-token'];
   if (!masterToken) {
     return res.status(401).json({ error: 'Main authentication required. Please sign in first.' });
   }
 
   try {
-    const session = db.prepare(`
+    const session = await db.prepare(`
       SELECT ms.token, ms.expires_at, ma.id, ma.email, ma.display_name, ma.is_active
       FROM master_sessions ms
       JOIN master_accounts ma ON ms.master_account_id = ma.id
-      WHERE ms.token = ? AND datetime(ms.expires_at) > datetime('now')
+      WHERE ms.token = ? AND ms.expires_at > NOW()
     `).get(masterToken);
 
     if (!session || !session.is_active) {
@@ -83,15 +83,15 @@ function requireMasterAuth(req, res, next) {
 }
 
 // POST /api/auth/login
-router.post('/login', requireMasterAuth, (req, res) => {
+router.post('/login', requireMasterAuth, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = db.prepare(`
-      SELECT * FROM users WHERE username = ?
+    const user = await db.prepare(`
+      SELECT * FROM users WHERE LOWER(username) = LOWER(?)
     `).get(username.trim());
 
     if (!user || !user.is_active) {
@@ -107,14 +107,14 @@ router.post('/login', requireMasterAuth, (req, res) => {
     const token = db.generateToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO user_sessions (token, user_id, expires_at)
       VALUES (?, ?, ?)
     `).run(token, user.id, expiresAt);
 
     // Update last login
-    db.prepare(`
-      UPDATE users SET last_login = datetime('now', 'localtime') WHERE id = ?
+    await db.prepare(`
+      UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?
     `).run(user.id);
 
     return res.json({
@@ -141,11 +141,11 @@ router.get('/me', requireMasterAuth, requireAuth, (req, res) => {
 });
 
 // POST /api/auth/logout - Invalidate active session
-router.post('/logout', requireMasterAuth, requireAuth, (req, res) => {
+router.post('/logout', requireMasterAuth, requireAuth, async (req, res) => {
   try {
     const token = req.sessionToken;
     if (token) {
-      db.prepare('DELETE FROM user_sessions WHERE token = ?').run(token);
+      await db.prepare('DELETE FROM user_sessions WHERE token = ?').run(token);
     }
     return res.json({ success: true, message: 'Logged out successfully' });
   } catch (err) {
@@ -155,9 +155,9 @@ router.post('/logout', requireMasterAuth, requireAuth, (req, res) => {
 });
 
 // GET /api/auth/users - List staff accounts (Admin only, requires Master Gateway)
-router.get('/users', requireMasterAuth, requireAuth, requireRole('admin'), (req, res) => {
+router.get('/users', requireMasterAuth, requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT id, username, full_name, role, is_active, created_at, last_login
       FROM users ORDER BY id ASC
     `).all();
@@ -168,22 +168,22 @@ router.get('/users', requireMasterAuth, requireAuth, requireRole('admin'), (req,
 });
 
 // POST /api/auth/users - Create new staff account (Admin only, requires Master Gateway)
-router.post('/users', requireMasterAuth, requireAuth, requireRole('admin'), (req, res) => {
+router.post('/users', requireMasterAuth, requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { username, password, fullName, role = 'technician' } = req.body;
     if (!username || !password || !fullName) {
       return res.status(400).json({ error: 'Username, password, and full name are required' });
     }
 
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.trim());
+    const existing = await db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(username.trim());
     if (existing) {
       return res.status(400).json({ error: 'Username already taken' });
     }
 
     const { hash, salt } = db.hashPassword(password);
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO users (username, password_hash, salt, full_name, role, created_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(username.trim(), hash, salt, fullName.trim(), role);
 
     return res.status(201).json({
@@ -201,7 +201,7 @@ router.post('/users', requireMasterAuth, requireAuth, requireRole('admin'), (req
 });
 
 // PUT /api/auth/password - Change authenticated user password (requires Master Gateway)
-router.put('/password', requireMasterAuth, requireAuth, (req, res) => {
+router.put('/password', requireMasterAuth, requireAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     if (!oldPassword || !newPassword) {
@@ -212,7 +212,7 @@ router.put('/password', requireMasterAuth, requireAuth, (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 6 characters long' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -223,12 +223,12 @@ router.put('/password', requireMasterAuth, requireAuth, (req, res) => {
     }
 
     const { hash, salt } = db.hashPassword(newPassword);
-    db.prepare(`
+    await db.prepare(`
       UPDATE users SET password_hash = ?, salt = ? WHERE id = ?
     `).run(hash, salt, user.id);
 
-    // Revoke all other active sessions for this user (Bug 1.4 fix)
-    db.prepare(`
+    // Revoke all other active sessions for this user
+    await db.prepare(`
       DELETE FROM user_sessions WHERE user_id = ? AND token != ?
     `).run(user.id, req.sessionToken);
 
@@ -239,7 +239,7 @@ router.put('/password', requireMasterAuth, requireAuth, (req, res) => {
 });
 
 // PUT /api/auth/users/:id/toggle - Toggle user active status (Admin only, requires Master Gateway)
-router.put('/users/:id/toggle', requireMasterAuth, requireAuth, requireRole('admin'), (req, res) => {
+router.put('/users/:id/toggle', requireMasterAuth, requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const targetId = parseInt(req.params.id, 10);
     if (targetId === req.user.id) {
@@ -249,17 +249,17 @@ router.put('/users/:id/toggle', requireMasterAuth, requireAuth, requireRole('adm
       return res.status(400).json({ error: 'Primary administrator account cannot be deactivated' });
     }
 
-    const user = db.prepare('SELECT is_active FROM users WHERE id = ?').get(targetId);
+    const user = await db.prepare('SELECT is_active FROM users WHERE id = ?').get(targetId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const newStatus = user.is_active ? 0 : 1;
-    db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, targetId);
+    await db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, targetId);
 
     // If deactivating, kill their sessions
     if (newStatus === 0) {
-      db.prepare('DELETE FROM user_sessions WHERE user_id = ?').run(targetId);
+      await db.prepare('DELETE FROM user_sessions WHERE user_id = ?').run(targetId);
     }
 
     return res.json({ success: true, is_active: newStatus });
@@ -269,7 +269,7 @@ router.put('/users/:id/toggle', requireMasterAuth, requireAuth, requireRole('adm
 });
 
 // DELETE /api/auth/users/:id - Remove staff member (Admin only, requires Master Gateway)
-router.delete('/users/:id', requireMasterAuth, requireAuth, requireRole('admin'), (req, res) => {
+router.delete('/users/:id', requireMasterAuth, requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const targetId = parseInt(req.params.id, 10);
     if (targetId === req.user.id) {
@@ -279,7 +279,7 @@ router.delete('/users/:id', requireMasterAuth, requireAuth, requireRole('admin')
       return res.status(400).json({ error: 'Primary administrator account cannot be deleted' });
     }
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
+    await db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
     return res.json({ success: true, message: 'User deleted successfully' });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to delete user: ' + err.message });
@@ -289,15 +289,15 @@ router.delete('/users/:id', requireMasterAuth, requireAuth, requireRole('admin')
 // ========== MASTER ACCOUNT ENDPOINTS (Main Login Gateway) ==========
 
 // POST /api/auth/master-login
-router.post('/master-login', (req, res) => {
+router.post('/master-login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const account = db.prepare(`
-      SELECT * FROM master_accounts WHERE email = ?
+    const account = await db.prepare(`
+      SELECT * FROM master_accounts WHERE LOWER(email) = LOWER(?)
     `).get(email.trim());
 
     if (!account || !account.is_active) {
@@ -313,14 +313,14 @@ router.post('/master-login', (req, res) => {
     const token = db.generateToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO master_sessions (token, master_account_id, expires_at)
       VALUES (?, ?, ?)
     `).run(token, account.id, expiresAt);
 
     // Update last login
-    db.prepare(`
-      UPDATE master_accounts SET last_login = datetime('now', 'localtime') WHERE id = ?
+    await db.prepare(`
+      UPDATE master_accounts SET last_login = CURRENT_TIMESTAMP WHERE id = ?
     `).run(account.id);
 
     return res.json({
@@ -346,10 +346,10 @@ router.get('/master-me', requireMasterAuth, (req, res) => {
 });
 
 // POST /api/auth/master-logout — Invalidate master session
-router.post('/master-logout', requireMasterAuth, (req, res) => {
+router.post('/master-logout', requireMasterAuth, async (req, res) => {
   try {
     if (req.masterToken) {
-      db.prepare('DELETE FROM master_sessions WHERE token = ?').run(req.masterToken);
+      await db.prepare('DELETE FROM master_sessions WHERE token = ?').run(req.masterToken);
     }
     return res.json({ success: true, message: 'Master session ended' });
   } catch (err) {
@@ -359,7 +359,7 @@ router.post('/master-logout', requireMasterAuth, (req, res) => {
 });
 
 // PUT /api/auth/master-password — Update master account credentials
-router.put('/master-password', requireMasterAuth, (req, res) => {
+router.put('/master-password', requireMasterAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     if (!oldPassword || !newPassword) {
@@ -370,7 +370,7 @@ router.put('/master-password', requireMasterAuth, (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 6 characters long' });
     }
 
-    const account = db.prepare('SELECT * FROM master_accounts WHERE id = ?').get(req.masterUser.id);
+    const account = await db.prepare('SELECT * FROM master_accounts WHERE id = ?').get(req.masterUser.id);
     if (!account) {
       return res.status(404).json({ error: 'Master account not found' });
     }
@@ -381,12 +381,12 @@ router.put('/master-password', requireMasterAuth, (req, res) => {
     }
 
     const { hash, salt } = db.hashPassword(newPassword);
-    db.prepare(`
+    await db.prepare(`
       UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?
     `).run(hash, salt, account.id);
 
-    // Revoke all other active master sessions for this account (Bug 1.4 fix)
-    db.prepare(`
+    // Revoke all other active master sessions for this account
+    await db.prepare(`
       DELETE FROM master_sessions WHERE master_account_id = ? AND token != ?
     `).run(account.id, req.masterToken);
 
@@ -397,10 +397,10 @@ router.put('/master-password', requireMasterAuth, (req, res) => {
 });
 
 // Periodic cleanup of expired sessions (runs every 30 minutes)
-setInterval(() => {
+setInterval(async () => {
   try {
-    db.prepare(`DELETE FROM user_sessions WHERE datetime(expires_at) <= datetime('now')`).run();
-    db.prepare(`DELETE FROM master_sessions WHERE datetime(expires_at) <= datetime('now')`).run();
+    await db.prepare(`DELETE FROM user_sessions WHERE expires_at <= NOW()`).run();
+    await db.prepare(`DELETE FROM master_sessions WHERE expires_at <= NOW()`).run();
   } catch (e) {
     // Non-fatal background cleanup error
   }

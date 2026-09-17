@@ -7,3 +7,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ssc-postgres
+          property: connectionString
+
+databases:
+  - name: ssc-postgres
+    plan: free

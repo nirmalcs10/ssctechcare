@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ssc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ssc_user
+      POSTGRES_PASSWORD: ssc_password
+      POSTGRES_DB: ssctechcare
+    ports:
+      - "5432:5432"
+    volumes:
+      - ssc_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssc_user -d ssctechcare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   ssc-service-center:
     build:
       context: .
@@ -12,10 +30,12 @@ services:
     environment:
       - PORT=5000
       - NODE_ENV=production
-    volumes:
-      # Persist SQLite database outside container
-      - ssc_data:/app/server/data
+      - DATABASE_URL=postgresql://ssc_user:ssc_password@postgres:5432/ssctechcare
+      - DATABASE_SSL=false
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
-  ssc_data:
+  ssc_pgdata:
     driver: local

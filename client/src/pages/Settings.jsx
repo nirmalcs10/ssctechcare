@@ -219,7 +219,7 @@ export default function Settings({ currentUser }) {
     setBackupLoading(true);
     try {
       await api.downloadBackup();
-      showToast('Database backup (.db) successfully downloaded!');
+      showToast('Database backup (.json) successfully downloaded!');
     } catch (err) {
       showError(err.message || 'Failed to download backup');
     } finally {
@@ -230,8 +230,8 @@ export default function Settings({ currentUser }) {
   const handleRestoreFileSelected = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.endsWith('.db') && !file.name.endsWith('.sqlite')) {
-      showError('Please select a valid SQLite database backup file (.db or .sqlite)');
+    if (!file.name.endsWith('.json') && !file.name.endsWith('.db') && !file.name.endsWith('.sqlite')) {
+      showError('Please select a valid database backup file (.json)');
       return;
     }
     setSelectedBackupFile(file);
