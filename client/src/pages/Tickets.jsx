@@ -171,7 +171,7 @@ export default function Tickets({ onSelectTicket, onOpenNewTicket, onPrintJobCar
             <p className="text-xs text-slate-500 mt-1">Try adjusting your search criteria or create a new job card.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto touch-scroll">
+          <div className="overflow-x-auto touch-scroll overscroll-y-auto">
             <table className="w-full text-left text-xs sm:text-sm min-w-[750px]">
               <thead className="bg-slate-800/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
                 <tr>

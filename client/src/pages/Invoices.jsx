@@ -217,7 +217,7 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
             <p className="text-xs text-slate-500 mt-1">Create an invoice from an active repair ticket.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto touch-scroll">
+          <div className="overflow-x-auto touch-scroll overscroll-y-auto">
             <table className="w-full text-left text-xs sm:text-sm min-w-[750px]">
               <thead className="bg-slate-800/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
                 <tr>

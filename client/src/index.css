@@ -5,13 +5,11 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    touch-action: manipulation;
   }
 
   body {
     @apply bg-slate-900 text-slate-100 min-h-screen antialiased selection:bg-sky-500 selection:text-white;
     -webkit-tap-highlight-color: transparent;
-    overflow-x: hidden;
   }
 
   /* Prevent automatic iOS Safari zoom when tapping inputs by enforcing minimum 16px font size on small screens */
@@ -24,10 +22,11 @@
   }
 }
 
-/* Touch-friendly scrolling utility */
+/* Touch-friendly scrolling utility - allows vertical scroll wheel events to pass through seamlessly */
 .touch-scroll {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 
 /* Safe area padding utilities for notches / home indicators */
