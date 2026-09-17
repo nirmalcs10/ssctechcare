@@ -11,12 +11,24 @@ import {
   User,
   Clock,
   Calendar,
-  Lock
+  Lock,
+  Menu,
+  X
 } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { useComputerClock } from '../utils/date';
 
-export default function Navbar({ onOpenNewTicket, onSearch, onNavigate, currentUser, masterUser, onLogout, onMasterLogout }) {
+export default function Navbar({ 
+  onOpenNewTicket, 
+  onSearch, 
+  onNavigate, 
+  currentUser, 
+  masterUser, 
+  onLogout, 
+  onMasterLogout,
+  onToggleMobileSidebar,
+  isMobileSidebarOpen
+}) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const clock = useComputerClock();
@@ -40,21 +52,35 @@ export default function Navbar({ onOpenNewTicket, onSearch, onNavigate, currentU
   };
 
   return (
-    <header className="no-print bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-4 lg:px-8 py-3 transition-all">
-      <div className="flex items-center justify-between gap-4">
-        {/* Left: Brand Identity */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
-            <Wrench className="w-5 h-5" />
+    <header className="no-print bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-3 sm:px-4 lg:px-8 py-2.5 sm:py-3 transition-all">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
+        {/* Left: Mobile Toggle & Brand Identity */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Hamburger toggle button for mobile */}
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="lg:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-700/80 transition-all active:scale-95 shrink-0"
+            aria-label={isMobileSidebarOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+          >
+            {isMobileSidebarOpen ? (
+              <X className="w-5 h-5 text-sky-400" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
+          </button>
+
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white shrink-0">
+            <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-lg text-white tracking-tight">SSC TechCare</span>
-              <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-bold text-base sm:text-lg text-white tracking-tight">SSC TechCare</span>
+              <span className="hidden sm:inline-block text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
                 Service Desk v1.0
               </span>
             </div>
-            <p className="text-xs text-slate-400 hidden sm:block">Computer & Hardware Service Management</p>
+            <p className="text-[11px] text-slate-400 hidden md:block">Computer & Hardware Service Management</p>
           </div>
         </div>
 
@@ -108,10 +134,11 @@ export default function Navbar({ onOpenNewTicket, onSearch, onNavigate, currentU
           {/* Quick New Ticket Button */}
           <button
             onClick={onOpenNewTicket}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 shadow-md shadow-sky-500/20 transition-all active:scale-95"
+            className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 shadow-md shadow-sky-500/20 transition-all active:scale-95 shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>{t('newJobCard')}</span>
+            <span className="hidden sm:inline">{t('newJobCard')}</span>
+            <span className="sm:hidden">New</span>
           </button>
 
           {/* User Profile & Logout */}

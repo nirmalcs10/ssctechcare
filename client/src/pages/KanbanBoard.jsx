@@ -109,7 +109,7 @@ export default function KanbanBoard({ onSelectTicket, onOpenNewTicket }) {
       </div>
 
       {/* Kanban Columns Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 min-h-[650px] overflow-x-auto pb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 min-h-[650px] overflow-x-auto touch-scroll pb-4">
         {KANBAN_COLUMNS.map((col, colIdx) => {
           const colTickets = filteredTickets.filter(t => t.status === col.id);
           return (

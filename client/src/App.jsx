@@ -18,7 +18,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import MainLogin from './pages/MainLogin';
 
-import { Wrench } from 'lucide-react';
+import { Wrench, LayoutDashboard, Ticket, Kanban, Receipt, Menu } from 'lucide-react';
 import { api } from './api';
 import { applyAppearance } from './utils/theme';
 
@@ -29,6 +29,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedTicketId, setSelectedTicketId] = useState(null);
   const [invoicePreselectId, setInvoicePreselectId] = useState(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Modals & Print Previews
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
@@ -238,29 +239,38 @@ export default function App() {
       <Navbar
         onOpenNewTicket={() => setIsNewTicketOpen(true)}
         onSearch={handleGlobalSearch}
-        onNavigate={tab => setCurrentTab(tab)}
+        onNavigate={tab => {
+          setSelectedTicketId(null);
+          setCurrentTab(tab);
+          setIsMobileSidebarOpen(false);
+        }}
         currentUser={currentUser}
         masterUser={masterUser}
         onLogout={handleLogout}
         onMasterLogout={handleMasterLogout}
+        onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+        isMobileSidebarOpen={isMobileSidebarOpen}
       />
 
       {/* Main App Layout */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0">
         {/* Sidebar */}
         <Sidebar
           currentTab={currentTab}
           onSelectTab={tab => {
             setSelectedTicketId(null);
             setCurrentTab(tab);
+            setIsMobileSidebarOpen(false);
           }}
           metrics={metrics}
           currentUser={currentUser}
           onLogout={handleLogout}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Content Area */}
-        <main className="flex-1 p-4 lg:p-8 max-w-7xl overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-4 lg:p-8 pb-24 lg:pb-8 max-w-7xl w-full min-w-0 overflow-y-auto">
           {currentTab === 'dashboard' && (
             <Dashboard
               onSelectTicket={handleSelectTicket}
@@ -331,6 +341,81 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-1 flex items-center justify-around pb-safe shadow-lg">
+        <button
+          onClick={() => {
+            setSelectedTicketId(null);
+            setCurrentTab('dashboard');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+            currentTab === 'dashboard' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Dashboard</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setSelectedTicketId(null);
+            setCurrentTab('tickets');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`relative flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+            currentTab === 'tickets' || currentTab === 'ticket-detail' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Ticket className="w-5 h-5" />
+          {metrics.activeRepairs > 0 && (
+            <span className="absolute top-0 right-1 px-1.5 py-0.2 bg-sky-500 text-white rounded-full text-[9px] font-bold">
+              {metrics.activeRepairs}
+            </span>
+          )}
+          <span className="text-[10px] mt-0.5">Tickets</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setSelectedTicketId(null);
+            setCurrentTab('kanban');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+            currentTab === 'kanban' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Kanban className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Kanban</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setSelectedTicketId(null);
+            setCurrentTab('invoices');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+            currentTab === 'invoices' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Receipt className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Invoices</span>
+        </button>
+
+        <button
+          onClick={() => setIsMobileSidebarOpen(prev => !prev)}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+            isMobileSidebarOpen ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+          aria-label="Toggle Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Menu</span>
+        </button>
+      </nav>
 
       {/* Intake / New Repair Ticket Modal */}
       <NewTicketModal

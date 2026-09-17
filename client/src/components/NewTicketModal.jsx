@@ -212,17 +212,17 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl my-8 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl my-2 sm:my-8 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-800/60 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
-              <Wrench className="w-5 h-5" />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-800/60 border-b border-slate-800">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+              <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">Create New Repair Job Card</h3>
-              <p className="text-xs text-slate-400">Intake device details, accessories checklist, and customer contact</p>
+              <h3 className="text-base sm:text-lg font-bold text-white leading-tight">Create New Repair Job Card</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400">Intake device details, accessories checklist, and customer contact</p>
             </div>
           </div>
           <button
@@ -234,13 +234,13 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
         </div>
 
         {error && (
-          <div className="mx-6 mt-4 p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs">
+          <div className="mx-4 sm:mx-6 mt-4 p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs">
             {error}
           </div>
         )}
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-h-[82vh] overflow-y-auto touch-scroll">
           {/* Section 1: Customer Info */}
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sky-400 mb-3">

@@ -213,8 +213,8 @@ export default function Inventory() {
             <p className="text-xs text-slate-500 mt-1">Adjust filters or click "Add Spare Part".</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
+          <div className="overflow-x-auto touch-scroll">
+            <table className="w-full text-left text-xs sm:text-sm min-w-[700px]">
               <thead className="bg-slate-800/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
                 <tr>
                   <th className="py-3 px-4">SKU / Code</th>

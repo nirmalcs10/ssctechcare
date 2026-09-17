@@ -91,7 +91,7 @@ export default function Tickets({ onSelectTicket, onOpenNewTicket, onPrintJobCar
       {/* Filter Tabs & Search Bar */}
       <div className="space-y-4">
         {/* Status Scrollable Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800 scrollbar-none touch-scroll">
           {STATUS_TABS.map(tab => (
             <button
               key={tab.id}
@@ -171,8 +171,8 @@ export default function Tickets({ onSelectTicket, onOpenNewTicket, onPrintJobCar
             <p className="text-xs text-slate-500 mt-1">Try adjusting your search criteria or create a new job card.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
+          <div className="overflow-x-auto touch-scroll">
+            <table className="w-full text-left text-xs sm:text-sm min-w-[750px]">
               <thead className="bg-slate-800/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
                 <tr>
                   <th className="py-3 px-4">Ticket / Date</th>
