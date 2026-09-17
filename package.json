@@ -1,0 +1,32 @@
+{
+  "name": "ssc-service-center",
+  "version": "1.0.0",
+  "description": "Computer Service Center Management Application",
+  "main": "server/src/server.js",
+  "scripts": {
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"node server/src/server.js\" \"npm --prefix client run dev\"",
+    "dev:server": "node server/src/server.js",
+    "dev:client": "npm --prefix client run dev",
+    "seed": "node server/src/db/seed.js",
+    "test": "node test_api.js",
+    "start": "node server/src/server.js",
+    "build": "npm --prefix client install && npm --prefix client run build"
+  },
+  "keywords": [
+    "service-center",
+    "computer-repair",
+    "inventory",
+    "ticketing"
+  ],
+  "author": "SSC",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

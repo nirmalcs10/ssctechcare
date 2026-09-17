@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  ssc-service-center:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ssc_techcare_app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+    volumes:
+      # Persist SQLite database outside container
+      - ssc_data:/app/server/data
+
+volumes:
+  ssc_data:
+    driver: local

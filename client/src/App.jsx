@@ -1,0 +1,363 @@
+import React, { useState, useEffect } from 'react';
+import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import NewTicketModal from './components/NewTicketModal';
+import PrintJobCard from './components/PrintJobCard';
+import PrintInvoice from './components/PrintInvoice';
+
+import Dashboard from './pages/Dashboard';
+import Tickets from './pages/Tickets';
+import TicketDetail from './pages/TicketDetail';
+import KanbanBoard from './pages/KanbanBoard';
+import Inventory from './pages/Inventory';
+import Customers from './pages/Customers';
+import Invoices from './pages/Invoices';
+import Technicians from './pages/Technicians';
+import PublicTrack from './pages/PublicTrack';
+import Settings from './pages/Settings';
+import Login from './pages/Login';
+import MainLogin from './pages/MainLogin';
+
+import { Wrench } from 'lucide-react';
+import { api } from './api';
+import { applyAppearance } from './utils/theme';
+
+export default function App() {
+  const [masterUser, setMasterUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [invoicePreselectId, setInvoicePreselectId] = useState(null);
+
+  // Modals & Print Previews
+  const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
+  const [printTicketData, setPrintTicketData] = useState(null);
+  const [printInvoiceData, setPrintInvoiceData] = useState(null);
+  const [shopSettings, setShopSettings] = useState({});
+
+  // Summary Metrics for Sidebar badges
+  const [metrics, setMetrics] = useState({ activeRepairs: 0, lowStockCount: 0 });
+
+  // Initial Auth & Theme Check
+  useEffect(() => {
+    applyAppearance();
+    checkAuth();
+
+    const handleThemeChange = () => {
+      applyAppearance();
+    };
+    window.addEventListener('ssc-appearance-changed', handleThemeChange);
+    return () => window.removeEventListener('ssc-appearance-changed', handleThemeChange);
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      // Step 1: Check master session (Main Login gateway)
+      const masterRes = await api.getMasterMe();
+      if (masterRes && masterRes.masterUser) {
+        setMasterUser(masterRes.masterUser);
+
+        // Step 2: Check staff session (only if master is valid)
+        try {
+          const staffRes = await api.getMe();
+          if (staffRes && staffRes.user) {
+            setCurrentUser(staffRes.user);
+          } else {
+            setCurrentUser(null);
+          }
+        } catch (err) {
+          setCurrentUser(null);
+        }
+      } else {
+        setMasterUser(null);
+        setCurrentUser(null);
+      }
+    } catch (err) {
+      setMasterUser(null);
+      setCurrentUser(null);
+    } finally {
+      setIsAuthChecking(false);
+    }
+  };
+
+  const handleMasterLogin = async (credentials) => {
+    const data = await api.masterLogin(credentials);
+    setMasterUser(data.masterUser);
+    setCurrentTab('dashboard');
+  };
+
+  const handleLogin = async (credentials) => {
+    const data = await api.login(credentials);
+    setCurrentUser(data.user);
+    setCurrentTab('dashboard');
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm('Are you sure you want to sign out from staff portal?')) {
+      await api.logout();
+      setCurrentUser(null);
+      setCurrentTab('dashboard');
+    }
+  };
+
+  const handleMasterLogout = async () => {
+    if (window.confirm('Are you sure you want to sign out completely? This will end your main session.')) {
+      await api.masterLogout();
+      setMasterUser(null);
+      setCurrentUser(null);
+      setCurrentTab('dashboard');
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      loadMetrics();
+    }
+  }, [currentTab, currentUser]);
+
+  // Redirect technician role away from restricted tabs (customers, technicians)
+  useEffect(() => {
+    if (currentUser?.role === 'technician' && (currentTab === 'customers' || currentTab === 'technicians')) {
+      setCurrentTab('dashboard');
+    }
+  }, [currentUser, currentTab]);
+
+  const loadMetrics = async () => {
+    try {
+      const [dash, settings] = await Promise.all([
+        api.getDashboard(),
+        api.getSettings()
+      ]);
+      setMetrics({
+        activeRepairs: dash.activeRepairs || 0,
+        lowStockCount: (dash.lowStockItems || []).length
+      });
+      setShopSettings(settings || {});
+    } catch (err) {
+      console.error('Failed to load metrics:', err);
+    }
+  };
+
+  // Ticket selection
+  const handleSelectTicket = (id) => {
+    setSelectedTicketId(id);
+    setCurrentTab('ticket-detail');
+  };
+
+  // Trigger Print Job Card
+  const handlePrintJobCard = async (ticketId) => {
+    try {
+      const data = await api.getTicket(ticketId);
+      const settings = await api.getSettings();
+      setPrintTicketData(data);
+      setShopSettings(settings);
+    } catch (err) {
+      alert('Failed to load ticket for printing: ' + err.message);
+    }
+  };
+
+  // Trigger Print Invoice
+  const handlePrintInvoice = async (invoiceId) => {
+    try {
+      const data = await api.getInvoice(invoiceId);
+      setPrintInvoiceData(data);
+    } catch (err) {
+      alert('Failed to load invoice for printing: ' + err.message);
+    }
+  };
+
+  // Direct invoice generation from ticket
+  const handleGenerateInvoiceFromTicket = (ticketId) => {
+    setInvoicePreselectId(ticketId);
+    setCurrentTab('invoices');
+  };
+
+  // Global search from Navbar
+  const handleGlobalSearch = (query) => {
+    setCurrentTab('tickets');
+  };
+
+  // Loading screen during initial token verification
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-200">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/30 text-white mb-4 animate-pulse">
+          <Wrench className="w-6 h-6" />
+        </div>
+        <p className="text-sm font-semibold tracking-wide text-slate-400">Loading SSC TechCare Station...</p>
+      </div>
+    );
+  }
+
+  // ========== TIER 1: Main Login (email + password gateway) ==========
+  if (!masterUser) {
+    if (currentTab === 'track') {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+          <div className="p-4 lg:p-8 max-w-5xl mx-auto w-full">
+            <PublicTrack onBackToLogin={() => setCurrentTab('login')} isLoggedIn={false} />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <MainLogin
+        onLoginSuccess={handleMasterLogin}
+        onGoToTracker={() => setCurrentTab('track')}
+      />
+    );
+  }
+
+  // ========== TIER 2: Staff Login (username + password) ==========
+  if (!currentUser) {
+    if (currentTab === 'track') {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+          <div className="p-4 lg:p-8 max-w-5xl mx-auto w-full">
+            <PublicTrack onBackToLogin={() => setCurrentTab('login')} isLoggedIn={false} />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <Login
+        onLoginSuccess={handleLogin}
+        onGoToTracker={() => setCurrentTab('track')}
+        onMasterLogout={handleMasterLogout}
+        masterUser={masterUser}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Top Navigation */}
+      <Navbar
+        onOpenNewTicket={() => setIsNewTicketOpen(true)}
+        onSearch={handleGlobalSearch}
+        onNavigate={tab => setCurrentTab(tab)}
+        currentUser={currentUser}
+        masterUser={masterUser}
+        onLogout={handleLogout}
+        onMasterLogout={handleMasterLogout}
+      />
+
+      {/* Main App Layout */}
+      <div className="flex-1 flex">
+        {/* Sidebar */}
+        <Sidebar
+          currentTab={currentTab}
+          onSelectTab={tab => {
+            setSelectedTicketId(null);
+            setCurrentTab(tab);
+          }}
+          metrics={metrics}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+        />
+
+        {/* Content Area */}
+        <main className="flex-1 p-4 lg:p-8 max-w-7xl overflow-y-auto">
+          {currentTab === 'dashboard' && (
+            <Dashboard
+              onSelectTicket={handleSelectTicket}
+              onOpenNewTicket={() => setIsNewTicketOpen(true)}
+              onNavigate={tab => setCurrentTab(tab)}
+              currentUser={currentUser}
+            />
+          )}
+
+          {currentTab === 'tickets' && (
+            <Tickets
+              onSelectTicket={handleSelectTicket}
+              onOpenNewTicket={() => setIsNewTicketOpen(true)}
+              onPrintJobCard={handlePrintJobCard}
+            />
+          )}
+
+          {currentTab === 'ticket-detail' && selectedTicketId && (
+            <TicketDetail
+              ticketId={selectedTicketId}
+              onBack={() => setCurrentTab('tickets')}
+              onPrintJobCard={handlePrintJobCard}
+              onGenerateInvoice={handleGenerateInvoiceFromTicket}
+              onViewInvoice={handlePrintInvoice}
+            />
+          )}
+
+          {currentTab === 'kanban' && (
+            <KanbanBoard
+              onSelectTicket={handleSelectTicket}
+              onOpenNewTicket={() => setIsNewTicketOpen(true)}
+            />
+          )}
+
+          {currentTab === 'inventory' && (
+            <Inventory />
+          )}
+
+          {currentTab === 'customers' && currentUser?.role !== 'technician' && (
+            <Customers
+              onSelectTicket={handleSelectTicket}
+            />
+          )}
+
+          {currentTab === 'invoices' && (
+            <Invoices
+              preselectedTicketId={invoicePreselectId}
+              onPrintInvoice={handlePrintInvoice}
+              onSelectTicket={handleSelectTicket}
+            />
+          )}
+
+          {currentTab === 'technicians' && currentUser?.role !== 'technician' && (
+            <Technicians
+              onSelectTicket={handleSelectTicket}
+            />
+          )}
+
+          {currentTab === 'track' && (
+            <PublicTrack
+              onBackToLogin={() => setCurrentTab('dashboard')}
+              isLoggedIn={true}
+            />
+          )}
+
+          {currentTab === 'settings' && (
+            <Settings currentUser={currentUser} />
+          )}
+        </main>
+      </div>
+
+      {/* Intake / New Repair Ticket Modal */}
+      <NewTicketModal
+        isOpen={isNewTicketOpen}
+        onClose={() => setIsNewTicketOpen(false)}
+        onSuccess={(created) => {
+          loadMetrics();
+          handleSelectTicket(created.id);
+        }}
+      />
+
+      {/* Print Job Sheet A4 Modal */}
+      {printTicketData && (
+        <PrintJobCard
+          ticket={printTicketData}
+          shopSettings={shopSettings}
+          onClose={() => setPrintTicketData(null)}
+        />
+      )}
+
+      {/* Print Tax Invoice A4 Modal */}
+      {printInvoiceData && (
+        <PrintInvoice
+          invoice={printInvoiceData}
+          onClose={() => setPrintInvoiceData(null)}
+        />
+      )}
+    </div>
+  );
+}

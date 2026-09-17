@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSC TechCare - Technical Architecture & Specification</title>
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --dark: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-200: #e2e8f0;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --emerald: #059669;
+      --rose: #e11d48;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      background-color: #f8fafc;
+      line-height: 1.6;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 48px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+    }
+
+    /* Print / PDF Button */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--slate-200);
+    }
+
+    .print-btn {
+      background: linear-gradient(135deg, #0284c7, #4f46e5);
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+      transition: all 0.2s;
+    }
+
+    .print-btn:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 36px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #e0f2fe;
+      color: #0284c7;
+      border-radius: 9999px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--dark);
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--slate-600);
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 24px;
+      padding: 16px;
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .meta-item span {
+      display: block;
+      color: var(--slate-600);
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .meta-item strong {
+      color: var(--dark);
+      font-size: 13px;
+    }
+
+    /* Section Headings */
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--dark);
+      margin: 36px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1.5px solid var(--slate-200);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--slate-800);
+      margin: 20px 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    p {
+      font-size: 13.5px;
+      color: var(--slate-700);
+      margin-bottom: 12px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 12.5px;
+    }
+
+    th {
+      background: var(--slate-100);
+      color: var(--dark);
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid var(--slate-200);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 9px 12px;
+      border: 1px solid var(--slate-200);
+      color: var(--slate-700);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    /* Code blocks */
+    pre, code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 11.5px;
+    }
+
+    code {
+      background: #f1f5f9;
+      color: #0369a1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    pre {
+      background: var(--dark);
+      color: #f8fafc;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      line-height: 1.5;
+    }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 16px 0 24px;
+    }
+
+    .card {
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      padding: 16px;
+      background: var(--slate-50);
+    }
+
+    .card-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--dark);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card p {
+      font-size: 12px;
+      margin-bottom: 0;
+      color: var(--slate-600);
+    }
+
+    /* Architecture diagram box */
+    .diagram-box {
+      background: #f8fafc;
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+      text-align: center;
+      font-family: monospace;
+      font-size: 12px;
+      color: #0f172a;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    /* Print / PDF Specific Settings */
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+      }
+
+      .container {
+        max-width: 100% !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      @page {
+        size: A4;
+        margin: 14mm 14mm 14mm 14mm;
+      }
+
+      h2 {
+        page-break-after: avoid;
+      }
+
+      table, pre, .card-grid {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Toolbar (Hidden in Print/PDF) -->
+    <div class="toolbar no-print">
+      <div>
+        <span style="font-weight: 700; font-size: 13px; color: var(--dark);">SSC TechCare Documentation</span>
+        <span style="font-size: 12px; color: var(--slate-600); margin-left: 8px;">Technical Specification (PDF Export Ready)</span>
+      </div>
+      <button class="print-btn" onclick="window.print()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        <span>Print or Save as PDF</span>
+      </button>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <span class="badge">Architecture & System Specification</span>
+      <h1>SSC TechCare Service Center Management</h1>
+      <p class="subtitle">Complete Technical Design Document for Full-Stack Computer & Hardware Service Application</p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span>Frontend</span>
+          <strong>React 19 / Vite / Tailwind</strong>
+        </div>
+        <div class="meta-item">
+          <span>Backend</span>
+          <strong>Node.js / Express 5</strong>
+        </div>
+        <div class="meta-item">
+          <span>Database</span>
+          <strong>SQLite 3 (better-sqlite3)</strong>
+        </div>
+        <div class="meta-item">
+          <span>Architecture</span>
+          <strong>REST API / Single Process</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 1: System Overview -->
+    <h2>1. System Architecture Overview</h2>
+    <p>
+      SSC TechCare is built as a modular client-server web application engineered specifically for low-latency workshop operations, local data sovereignty, and cross-device responsiveness.
+    </p>
+
+    <div class="diagram-box">
+┌────────────────────────────────────────────────────────────────────────┐
+│                   CLIENT APPLICATION (Browser / SPA)                   │
+│          React 19.2 + Tailwind CSS v3.4 + Lucide React Icons           │
+│        (Component-Driven UI, Responsive Workbench, A4 Print Engine)    │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ HTTP / JSON REST API
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                    BACKEND APPLICATION (Node.js)                       │
+│                     Express.js 5.2 RESTful Engine                      │
+│     (8 Modular Route Handlers, Auto-Stock Decrement, Unified Hosting)  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Direct C++ V8 In-Process Bindings
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                  EMBEDDED DATABASE (SQLite Engine)                     │
+│               better-sqlite3 Driver (WAL Mode Enabled)                 │
+│         File: server/data/service_center.db (ACID Compliant)           │
+└────────────────────────────────────────────────────────────────────────┘
+    </div>
+
+    <!-- Section 2: Frontend Tech Stack -->
+    <h2>2. Frontend Technology Stack</h2>
+    <p>
+      The user interface is built as a responsive Single Page Application (SPA) providing an instant, reactive desktop-grade experience for front desk staff and workshop engineers.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Version</th>
+          <th>Technical Role & Implementation Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Language</strong></td>
+          <td>JavaScript (ES6+)</td>
+          <td>ES2023+</td>
+          <td>Modern ECMAScript featuring async/await, optional chaining, and destructuring.</td>
+        </tr>
+        <tr>
+          <td><strong>UI Library</strong></td>
+          <td>React</td>
+          <td>v19.2.8</td>
+          <td>Functional components, custom Hooks (`useState`, `useEffect`), reactive UI state.</td>
+        </tr>
+        <tr>
+          <td><strong>DOM Renderer</strong></td>
+          <td>React DOM</td>
+          <td>v19.2.8</td>
+          <td>Virtual DOM reconciliation, modal overlays, and event delegation.</td>
+        </tr>
+        <tr>
+          <td><strong>Bundler & Dev Server</strong></td>
+          <td>Vite</td>
+          <td>v8.3.0</td>
+          <td>Native ESM development server with Hot Module Replacement (HMR) and Rollup production builds.</td>
+        </tr>
+        <tr>
+          <td><strong>CSS Framework</strong></td>
+          <td>Tailwind CSS</td>
+          <td>v3.4.19</td>
+          <td>Utility-first CSS, dark theme color system (slate/sky/emerald/rose palettes).</td>
+        </tr>
+        <tr>
+          <td><strong>Icons</strong></td>
+          <td>Lucide React</td>
+          <td>v1.45.0</td>
+          <td>Tree-shaken SVG icons for workshop stages, device types, and system alerts.</td>
+        </tr>
+        <tr>
+          <td><strong>Print Engine</strong></td>
+          <td>CSS `@media print`</td>
+          <td>Native</td>
+          <td>Dedicated printable styling for A4 Service Intake Job Sheets and Tax Invoices.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Section 3: Backend Tech Stack -->
+    <h2>3. Backend Technology Stack & Architecture</h2>
+    <p>
+      The backend is a lightweight, high-performance Node.js service providing RESTful JSON APIs and integrated single-process static file hosting.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Version</th>
+          <th>Technical Role & Implementation Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Runtime</strong></td>
+          <td>Node.js</td>
+          <td>v20+ / v24</td>
+          <td>High-throughput asynchronous non-blocking event loop execution environment.</td>
+        </tr>
+        <tr>
+          <td><strong>Framework</strong></td>
+          <td>Express.js</td>
+          <td>v5.2.1</td>
+          <td>RESTful routing, middleware chaining, and HTTP request/response pipeline.</td>
+        </tr>
+        <tr>
+          <td><strong>CORS</strong></td>
+          <td>cors</td>
+          <td>v2.8.5</td>
+          <td>Cross-Origin Resource Sharing control across development ports.</td>
+        </tr>
+        <tr>
+          <td><strong>Config</strong></td>
+          <td>dotenv</td>
+          <td>v17.3</td>
+          <td>Environment variable management for configurable ports and paths.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>API Endpoints Architecture:</h3>
+    <ul>
+      <li><code>/api/tickets</code> - Full CRUD, state transitions, timeline audit logging, and parts association.</li>
+      <li><code>/api/inventory</code> - Spare parts catalog, threshold warnings, and atomic quantity adjustments.</li>
+      <li><code>/api/customers</code> - Customer database, phone uniqueness check, and previous repair histories.</li>
+      <li><code>/api/technicians</code> - Staff directory, specialized skills, and active job counters.</li>
+      <li><code>/api/invoices</code> - Billing engine, parts calculation, tax, discount, and payment records.</li>
+      <li><code>/api/track/:id</code> - Customer self-service lookup by ticket number or mobile phone.</li>
+      <li><code>/api/dashboard</code> - Real-time KPIs, active repair breakdown, urgent alerts, and revenue metrics.</li>
+      <li><code>/api/settings</code> - Workshop profile, tax percentage, and printed legal disclaimers.</li>
+    </ul>
+
+    <!-- Section 4: Database Engine & Schema -->
+    <h2>4. Database Engine & Relational Schema</h2>
+    <p>
+      The persistent data store is an embedded <strong>SQLite 3</strong> database interfaced via <code>better-sqlite3</code> (v13.0.3).
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">⚡ High Performance WAL Mode</div>
+        <p>Initialized with <code>PRAGMA journal_mode = WAL</code> (Write-Ahead Logging), allowing concurrent non-blocking reads while writing operations execute.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🛡️ Foreign Key Enforcement</div>
+        <p>Configured with <code>PRAGMA foreign_keys = ON</code>, ensuring relational integrity and cascading deletes across tickets, parts, and logs.</p>
+      </div>
+    </div>
+
+    <h3>Relational Tables (8 Normalized Entities):</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Primary Key</th>
+          <th>Foreign Keys</th>
+          <th>Key Columns & Data Types</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>customers</code></td>
+          <td>id (INTEGER)</td>
+          <td>None</td>
+          <td>name (TEXT), phone (TEXT UNIQUE), alt_phone, email, address, notes, created_at</td>
+        </tr>
+        <tr>
+          <td><code>technicians</code></td>
+          <td>id (INTEGER)</td>
+          <td>None</td>
+          <td>name (TEXT), phone, email, specialization, status, created_at</td>
+        </tr>
+        <tr>
+          <td><code>inventory</code></td>
+          <td>id (INTEGER)</td>
+          <td>None</td>
+          <td>sku (TEXT UNIQUE), name, category, cost_price, selling_price, stock_quantity, min_threshold, location</td>
+        </tr>
+        <tr>
+          <td><code>tickets</code></td>
+          <td>id (INTEGER)</td>
+          <td>customer_id, technician_id</td>
+          <td>ticket_number (TEXT UNIQUE), device_type, brand, model, serial_number, device_password, accessories (JSON), physical_condition (JSON), inspection_checklist (JSON), status, priority, estimated_cost, advance_paid</td>
+        </tr>
+        <tr>
+          <td><code>ticket_parts</code></td>
+          <td>id (INTEGER)</td>
+          <td>ticket_id (CASCADE), inventory_id</td>
+          <td>part_name (TEXT), quantity (INTEGER), unit_price (REAL), total_price (REAL)</td>
+        </tr>
+        <tr>
+          <td><code>timeline_logs</code></td>
+          <td>id (INTEGER)</td>
+          <td>ticket_id (CASCADE)</td>
+          <td>action (TEXT), description (TEXT), actor (TEXT), created_at (DATETIME)</td>
+        </tr>
+        <tr>
+          <td><code>invoices</code></td>
+          <td>id (INTEGER)</td>
+          <td>ticket_id, customer_id</td>
+          <td>invoice_number (TEXT UNIQUE), labor_charges, parts_total, subtotal, tax_rate, tax_amount, discount, grand_total, advance_deducted, amount_paid, balance_due, payment_status</td>
+        </tr>
+        <tr>
+          <td><code>settings</code></td>
+          <td>id (INTEGER)</td>
+          <td>None</td>
+          <td>shop_name, shop_phone, shop_email, shop_address, tax_rate, currency_symbol, terms_conditions</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Section 5: Key Business Logic & Atomic Deductions -->
+    <h2>5. Core Business Logic & Atomic Workflows</h2>
+
+    <h3>1. Atomic Inventory Allocation</h3>
+    <p>
+      When replacement components are installed on a job card, the stock count in the warehouse is automatically decremented inside a transactional query:
+    </p>
+    <pre>
+// 1. Deduct warehouse inventory
+UPDATE inventory SET stock_quantity = stock_quantity - ? WHERE id = ?;
+
+// 2. Attach part to job card
+INSERT INTO ticket_parts (ticket_id, inventory_id, part_name, quantity, unit_price, total_price)
+VALUES (?, ?, ?, ?, ?, ?);
+
+// 3. Log into timeline audit trail
+INSERT INTO timeline_logs (ticket_id, action, description, actor)
+VALUES (?, 'Part Added', 'Installed RAM/SSD', 'Technician');</pre>
+
+    <h3>2. Financial & Tax Computation Logic</h3>
+    <p>
+      Invoices dynamically compute labor charges, installed parts totals, tax rates, and deduct collected advance deposits:
+    </p>
+    <pre>
+Subtotal      = Parts Total + Labor Charges
+Tax Amount    = Subtotal × (Tax Rate / 100)
+Grand Total   = Subtotal + Tax Amount - Discount
+Balance Due   = Grand Total - Advance Deposit - Amount Paid Now</pre>
+
+    <!-- Section 6: Deployment & Verification -->
+    <h2>6. Production Deployment & Verification</h2>
+    <ul>
+      <li><strong>Unified Single Process:</strong> In production mode, Express serves the pre-compiled Vite bundle from <code>client/dist</code> and handles SPA client-side routing via an Express 5 <code>{*any}</code> wildcard route.</li>
+      <li><strong>Automated Test Suite:</strong> Comprehensive 14-assertion integration test suite (<code>node test_api.js</code>) verifying health, CRUD, stock deduction, and billing logic.</li>
+      <li><strong>Containerization:</strong> Multi-stage <code>Dockerfile</code> and <code>docker-compose.yml</code> mapping persistent Docker volumes for the SQLite database.</li>
+    </ul>
+
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--slate-200); font-size: 11px; color: var(--slate-600); display: flex; justify-content: space-between;">
+      <span>SSC TechCare Computer Service Center Management System</span>
+      <span>Engineered with React 19, Express 5 & SQLite</span>
+    </div>
+  </div>
+
+</body>
+</html>

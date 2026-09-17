@@ -1,0 +1,273 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-slate-100 min-h-screen antialiased selection:bg-sky-500 selection:text-white;
+  }
+}
+
+/* Print specific styles */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .printable-area {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 12mm;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ====================================================
+   APPEARANCE THEMES & WORKBENCH MODES
+   ==================================================== */
+
+/* Midnight Indigo Theme */
+.theme-midnight,
+.theme-midnight body,
+body.theme-midnight {
+  background-color: #060919 !important;
+}
+.theme-midnight .bg-slate-950 {
+  background-color: #060919 !important;
+}
+.theme-midnight .bg-slate-900,
+.theme-midnight .bg-slate-900\/90,
+.theme-midnight .bg-slate-900\/80 {
+  background-color: #0d1430 !important;
+}
+.theme-midnight .bg-slate-800,
+.theme-midnight .bg-slate-800\/80,
+.theme-midnight .bg-slate-800\/60,
+.theme-midnight .bg-slate-800\/50,
+.theme-midnight .bg-slate-800\/40 {
+  background-color: #141f4a !important;
+}
+.theme-midnight .border-slate-800,
+.theme-midnight .border-slate-800\/80,
+.theme-midnight .border-slate-800\/90,
+.theme-midnight .border-slate-700,
+.theme-midnight .border-slate-700\/80 {
+  border-color: #21316b !important;
+}
+.theme-midnight .hover\:bg-slate-800:hover,
+.theme-midnight .hover\:bg-slate-800\/70:hover,
+.theme-midnight .hover\:bg-slate-800\/80:hover {
+  background-color: #1e2d6b !important;
+}
+
+/* Obsidian Graphite Theme */
+.theme-obsidian,
+.theme-obsidian body,
+body.theme-obsidian {
+  background-color: #000000 !important;
+}
+.theme-obsidian .bg-slate-950 {
+  background-color: #000000 !important;
+}
+.theme-obsidian .bg-slate-900,
+.theme-obsidian .bg-slate-900\/90,
+.theme-obsidian .bg-slate-900\/80 {
+  background-color: #0c0c0c !important;
+}
+.theme-obsidian .bg-slate-800,
+.theme-obsidian .bg-slate-800\/80,
+.theme-obsidian .bg-slate-800\/60,
+.theme-obsidian .bg-slate-800\/50,
+.theme-obsidian .bg-slate-800\/40 {
+  background-color: #171717 !important;
+}
+.theme-obsidian .border-slate-800,
+.theme-obsidian .border-slate-800\/80,
+.theme-obsidian .border-slate-800\/90,
+.theme-obsidian .border-slate-700,
+.theme-obsidian .border-slate-700\/80 {
+  border-color: #262626 !important;
+}
+.theme-obsidian .hover\:bg-slate-800:hover,
+.theme-obsidian .hover\:bg-slate-800\/70:hover,
+.theme-obsidian .hover\:bg-slate-800\/80:hover {
+  background-color: #222222 !important;
+}
+
+/* Emerald Matrix Theme */
+.theme-emerald,
+.theme-emerald body,
+body.theme-emerald {
+  background-color: #030d08 !important;
+}
+.theme-emerald .bg-slate-950 {
+  background-color: #030d08 !important;
+}
+.theme-emerald .bg-slate-900,
+.theme-emerald .bg-slate-900\/90,
+.theme-emerald .bg-slate-900\/80 {
+  background-color: #081a11 !important;
+}
+.theme-emerald .bg-slate-800,
+.theme-emerald .bg-slate-800\/80,
+.theme-emerald .bg-slate-800\/60,
+.theme-emerald .bg-slate-800\/50,
+.theme-emerald .bg-slate-800\/40 {
+  background-color: #0f2c1f !important;
+}
+.theme-emerald .border-slate-800,
+.theme-emerald .border-slate-800\/80,
+.theme-emerald .border-slate-800\/90,
+.theme-emerald .border-slate-700,
+.theme-emerald .border-slate-700\/80 {
+  border-color: #1a4a35 !important;
+}
+.theme-emerald .hover\:bg-slate-800:hover,
+.theme-emerald .hover\:bg-slate-800\/70:hover,
+.theme-emerald .hover\:bg-slate-800\/80:hover {
+  background-color: #16402d !important;
+}
+
+/* ====================================================
+   ACCENT COLOR OVERRIDES
+   ==================================================== */
+
+/* Accent Emerald */
+.accent-emerald .text-sky-400 { color: #34d399 !important; }
+.accent-emerald .text-sky-300 { color: #6ee7b7 !important; }
+.accent-emerald .bg-sky-500 { background-color: #10b981 !important; }
+.accent-emerald .bg-sky-600 { background-color: #059669 !important; }
+.accent-emerald .hover\:bg-sky-500:hover { background-color: #10b981 !important; }
+.accent-emerald .hover\:bg-sky-600:hover { background-color: #059669 !important; }
+.accent-emerald .border-sky-500 { border-color: #10b981 !important; }
+.accent-emerald .border-sky-500\/30 { border-color: rgba(16, 185, 129, 0.35) !important; }
+.accent-emerald .border-sky-500\/20 { border-color: rgba(16, 185, 129, 0.25) !important; }
+.accent-emerald .border-sky-500\/50 { border-color: rgba(16, 185, 129, 0.5) !important; }
+.accent-emerald .bg-sky-500\/20 { background-color: rgba(16, 185, 129, 0.2) !important; }
+.accent-emerald .bg-sky-500\/15 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.accent-emerald .bg-sky-500\/10 { background-color: rgba(16, 185, 129, 0.1) !important; }
+.accent-emerald .shadow-sky-500\/20 { box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.2) !important; }
+.accent-emerald .focus\:ring-sky-500:focus { --tw-ring-color: #10b981 !important; }
+.accent-emerald .from-sky-500 { --tw-gradient-from: #10b981 var(--tw-gradient-from-position) !important; }
+.accent-emerald .to-indigo-600 { --tw-gradient-to: #059669 var(--tw-gradient-to-position) !important; }
+.accent-emerald .from-sky-600 { --tw-gradient-from: #059669 var(--tw-gradient-from-position) !important; }
+.accent-emerald .to-indigo-700 { --tw-gradient-to: #047857 var(--tw-gradient-to-position) !important; }
+
+/* Accent Amber */
+.accent-amber .text-sky-400 { color: #fbbf24 !important; }
+.accent-amber .text-sky-300 { color: #fcd34d !important; }
+.accent-amber .bg-sky-500 { background-color: #f59e0b !important; }
+.accent-amber .bg-sky-600 { background-color: #d97706 !important; }
+.accent-amber .hover\:bg-sky-500:hover { background-color: #f59e0b !important; }
+.accent-amber .hover\:bg-sky-600:hover { background-color: #d97706 !important; }
+.accent-amber .border-sky-500 { border-color: #f59e0b !important; }
+.accent-amber .border-sky-500\/30 { border-color: rgba(245, 158, 11, 0.35) !important; }
+.accent-amber .border-sky-500\/20 { border-color: rgba(245, 158, 11, 0.25) !important; }
+.accent-amber .border-sky-500\/50 { border-color: rgba(245, 158, 11, 0.5) !important; }
+.accent-amber .bg-sky-500\/20 { background-color: rgba(245, 158, 11, 0.2) !important; }
+.accent-amber .bg-sky-500\/15 { background-color: rgba(245, 158, 11, 0.15) !important; }
+.accent-amber .bg-sky-500\/10 { background-color: rgba(245, 158, 11, 0.1) !important; }
+.accent-amber .shadow-sky-500\/20 { box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.2) !important; }
+.accent-amber .focus\:ring-sky-500:focus { --tw-ring-color: #f59e0b !important; }
+.accent-amber .from-sky-500 { --tw-gradient-from: #f59e0b var(--tw-gradient-from-position) !important; }
+.accent-amber .to-indigo-600 { --tw-gradient-to: #d97706 var(--tw-gradient-to-position) !important; }
+.accent-amber .from-sky-600 { --tw-gradient-from: #d97706 var(--tw-gradient-from-position) !important; }
+.accent-amber .to-indigo-700 { --tw-gradient-to: #b45309 var(--tw-gradient-to-position) !important; }
+
+/* Accent Indigo */
+.accent-indigo .text-sky-400 { color: #818cf8 !important; }
+.accent-indigo .text-sky-300 { color: #a5b4fc !important; }
+.accent-indigo .bg-sky-500 { background-color: #6366f1 !important; }
+.accent-indigo .bg-sky-600 { background-color: #4f46e5 !important; }
+.accent-indigo .hover\:bg-sky-500:hover { background-color: #6366f1 !important; }
+.accent-indigo .hover\:bg-sky-600:hover { background-color: #4f46e5 !important; }
+.accent-indigo .border-sky-500 { border-color: #6366f1 !important; }
+.accent-indigo .border-sky-500\/30 { border-color: rgba(99, 102, 241, 0.35) !important; }
+.accent-indigo .border-sky-500\/20 { border-color: rgba(99, 102, 241, 0.25) !important; }
+.accent-indigo .border-sky-500\/50 { border-color: rgba(99, 102, 241, 0.5) !important; }
+.accent-indigo .bg-sky-500\/20 { background-color: rgba(99, 102, 241, 0.2) !important; }
+.accent-indigo .bg-sky-500\/15 { background-color: rgba(99, 102, 241, 0.15) !important; }
+.accent-indigo .bg-sky-500\/10 { background-color: rgba(99, 102, 241, 0.1) !important; }
+.accent-indigo .shadow-sky-500\/20 { box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.2) !important; }
+.accent-indigo .focus\:ring-sky-500:focus { --tw-ring-color: #6366f1 !important; }
+.accent-indigo .from-sky-500 { --tw-gradient-from: #6366f1 var(--tw-gradient-from-position) !important; }
+.accent-indigo .to-indigo-600 { --tw-gradient-to: #8b5cf6 var(--tw-gradient-to-position) !important; }
+.accent-indigo .from-sky-600 { --tw-gradient-from: #4f46e5 var(--tw-gradient-from-position) !important; }
+.accent-indigo .to-indigo-700 { --tw-gradient-to: #7c3aed var(--tw-gradient-to-position) !important; }
+
+/* Accent Rose */
+.accent-rose .text-sky-400 { color: #fb7185 !important; }
+.accent-rose .text-sky-300 { color: #fda4af !important; }
+.accent-rose .bg-sky-500 { background-color: #f43f5e !important; }
+.accent-rose .bg-sky-600 { background-color: #e11d48 !important; }
+.accent-rose .hover\:bg-sky-500:hover { background-color: #f43f5e !important; }
+.accent-rose .hover\:bg-sky-600:hover { background-color: #e11d48 !important; }
+.accent-rose .border-sky-500 { border-color: #f43f5e !important; }
+.accent-rose .border-sky-500\/30 { border-color: rgba(244, 63, 94, 0.35) !important; }
+.accent-rose .border-sky-500\/20 { border-color: rgba(244, 63, 94, 0.25) !important; }
+.accent-rose .border-sky-500\/50 { border-color: rgba(244, 63, 94, 0.5) !important; }
+.accent-rose .bg-sky-500\/20 { background-color: rgba(244, 63, 94, 0.2) !important; }
+.accent-rose .bg-sky-500\/15 { background-color: rgba(244, 63, 94, 0.15) !important; }
+.accent-rose .bg-sky-500\/10 { background-color: rgba(244, 63, 94, 0.1) !important; }
+.accent-rose .shadow-sky-500\/20 { box-shadow: 0 10px 15px -3px rgba(244, 63, 94, 0.2) !important; }
+.accent-rose .focus\:ring-sky-500:focus { --tw-ring-color: #f43f5e !important; }
+.accent-rose .from-sky-500 { --tw-gradient-from: #f43f5e var(--tw-gradient-from-position) !important; }
+.accent-rose .to-indigo-600 { --tw-gradient-to: #e11d48 var(--tw-gradient-to-position) !important; }
+.accent-rose .from-sky-600 { --tw-gradient-from: #e11d48 var(--tw-gradient-from-position) !important; }
+.accent-rose .to-indigo-700 { --tw-gradient-to: #be123c var(--tw-gradient-to-position) !important; }
+
+/* Density Compact */
+.density-compact {
+  font-size: 13px !important;
+}
+.density-compact main {
+  padding: 0.75rem !important;
+}
+@media (min-width: 1024px) {
+  .density-compact main {
+    padding: 1.25rem !important;
+  }
+}
+.density-compact table td,
+.density-compact table th {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}

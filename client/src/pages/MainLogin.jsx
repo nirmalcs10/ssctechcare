@@ -1,0 +1,218 @@
+import React, { useState } from 'react';
+import { 
+  Wrench, 
+  Lock, 
+  Mail, 
+  Eye, 
+  EyeOff, 
+  ShieldCheck, 
+  ArrowRight, 
+  AlertCircle, 
+  SearchCheck,
+  CheckCircle2,
+  Cpu
+} from 'lucide-react';
+
+export default function MainLogin({ onLoginSuccess, onGoToTracker }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setError('');
+
+    if (!email.trim() || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await onLoginSuccess({ email: email.trim(), password });
+    } catch (err) {
+      setError(err.message || 'Invalid email or password. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-sky-500 selection:text-white relative overflow-hidden">
+      {/* Background ambient lighting */}
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-sky-600/10 blur-[130px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-600/10 blur-[150px] pointer-events-none" />
+
+      {/* Top Bar / Minimal Brand */}
+      <header className="px-6 py-5 flex items-center justify-between border-b border-slate-900/80 backdrop-blur-sm z-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
+            <Wrench className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-lg text-white tracking-tight">SSC TechCare</span>
+              <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                Service Desk v1.0
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">Computer Service Center Management</p>
+          </div>
+        </div>
+
+        {onGoToTracker && (
+          <button
+            onClick={onGoToTracker}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-all"
+          >
+            <SearchCheck className="w-4 h-4 text-sky-400" />
+            <span>Customer Track Portal</span>
+          </button>
+        )}
+      </header>
+
+      {/* Center Auth Card */}
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 z-10 my-8">
+        <div className="w-full max-w-md bg-slate-900/90 border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 mb-4 shadow-inner">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Sign In</h1>
+            <p className="text-sm text-slate-400 mt-1">Enter your credentials to access SSC TechCare</p>
+          </div>
+
+          {/* Error Banner */}
+          {error && (
+            <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-start gap-2.5 animate-fadeIn">
+              <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. admin@ssctechcare.com"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm"
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-11 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm font-mono"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full mt-2 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 active:scale-[0.99] transition-all shadow-lg shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Signing In...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Default Credentials Info */}
+          <div className="mt-8 pt-6 border-t border-slate-800/80">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Default Credentials
+              </span>
+              <span className="text-[11px] text-slate-500">1-click fill</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@ssctechcare.com');
+                setPassword('admin123');
+                setError('');
+              }}
+              className="w-full p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/50 text-left transition-all group"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-sky-400 group-hover:text-sky-300">Main Admin Account</div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">admin@ssctechcare.com / admin123</div>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-sky-400 transition-colors" />
+              </div>
+            </button>
+          </div>
+
+          {/* Customer Portal Shortcut */}
+          {onGoToTracker && (
+            <div className="mt-6 pt-5 border-t border-slate-800/50 text-center">
+              <p className="text-xs text-slate-400 mb-2">Are you a customer checking a computer in service?</p>
+              <button
+                type="button"
+                onClick={onGoToTracker}
+                className="text-xs font-semibold text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1.5 transition-colors"
+              >
+                <SearchCheck className="w-3.5 h-3.5" />
+                <span>Track Repair Status with Ticket Number</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="px-6 py-4 text-center border-t border-slate-900/80 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 z-10">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-3.5 h-3.5 text-slate-400" />
+          <span>SSC TechCare Computer Solutions &copy; {new Date().getFullYear()}</span>
+        </div>
+        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+          <span>Encrypted Session &bull; Two-Factor Access Control</span>
+        </div>
+      </footer>
+    </div>
+  );
+}

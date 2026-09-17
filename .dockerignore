@@ -1,0 +1,6 @@
+node_modules
+client/node_modules
+.git
+.env
+server/data/*.db*
+test_api.js
