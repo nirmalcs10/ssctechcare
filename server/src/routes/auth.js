@@ -19,7 +19,7 @@ async function requireAuth(req, res, next) {
       SELECT s.token, s.expires_at, u.id, u.username, u.full_name, u.role, u.is_active
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.token = ? AND s.expires_at > NOW()
+      WHERE s.token = ? AND s.expires_at > CURRENT_TIMESTAMP
     `).get(token);
 
     if (!session || !session.is_active) {
@@ -62,7 +62,7 @@ async function requireMasterAuth(req, res, next) {
       SELECT ms.token, ms.expires_at, ma.id, ma.email, ma.display_name, ma.is_active
       FROM master_sessions ms
       JOIN master_accounts ma ON ms.master_account_id = ma.id
-      WHERE ms.token = ? AND ms.expires_at > NOW()
+      WHERE ms.token = ? AND ms.expires_at > CURRENT_TIMESTAMP
     `).get(masterToken);
 
     if (!session || !session.is_active) {
@@ -399,8 +399,8 @@ router.put('/master-password', requireMasterAuth, async (req, res) => {
 // Periodic cleanup of expired sessions (runs every 30 minutes)
 setInterval(async () => {
   try {
-    await db.prepare(`DELETE FROM user_sessions WHERE expires_at <= NOW()`).run();
-    await db.prepare(`DELETE FROM master_sessions WHERE expires_at <= NOW()`).run();
+    await db.prepare(`DELETE FROM user_sessions WHERE expires_at <= CURRENT_TIMESTAMP`).run();
+    await db.prepare(`DELETE FROM master_sessions WHERE expires_at <= CURRENT_TIMESTAMP`).run();
   } catch (e) {
     // Non-fatal background cleanup error
   }

@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 client/node_modules/
 
@@ -9,6 +9,7 @@ dist/
 # SQLite Databases & Backups (Preserve directories via .gitkeep)
 server/data/*.db
 server/data/*.db-*
+server/data/*.sqlite*
 server/data/*.bak
 server/data/backups/*
 !server/data/.gitkeep
