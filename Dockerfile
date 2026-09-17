@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Computer Service Center Management System
 
 # Stage 1: Build the React client
-FROM node:20-slim AS build
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app/client
 
@@ -14,14 +14,19 @@ COPY client/ ./
 RUN npm run build
 
 # Stage 2: Production runtime
-FROM node:20-slim AS production
+FROM node:22-bookworm-slim AS production
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Install curl for container health check
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install build dependencies (python3, g++, make) and curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy root dependencies and install production modules
 COPY package*.json ./
