@@ -54,13 +54,21 @@ async function runTests() {
   }
 
   try {
-    // 0a. Master Login Gateway
+    // 0a. Master Login Gateway (Default)
     const masterRes = await request('POST', '/api/auth/master-login', { email: 'admin@ssctechcare.com', password: 'admin123' });
     if (masterRes.status === 200 && masterRes.data.masterToken) {
       masterToken = masterRes.data.masterToken;
       assert('Master Gateway Login (admin@ssctechcare.com)', true);
     } else {
       assert('Master Gateway Login (admin@ssctechcare.com)', false, 'Failed to acquire master token: ' + JSON.stringify(masterRes.data));
+    }
+
+    // 0b. Master Login Gateway (Nirmal Admin)
+    const nirmalRes = await request('POST', '/api/auth/master-login', { email: 'nirmalaws10@gmail.com', password: '071825' });
+    if (nirmalRes.status === 200 && nirmalRes.data.masterToken) {
+      assert('Master Gateway Login (nirmalaws10@gmail.com)', true);
+    } else {
+      assert('Master Gateway Login (nirmalaws10@gmail.com)', false, 'Failed to login as nirmalaws10@gmail.com: ' + JSON.stringify(nirmalRes.data));
     }
 
     // 0b. Staff Login

@@ -591,14 +591,29 @@ async function seedDefaults() {
     console.log('✔ Initialized default staff accounts: admin, tech, staff');
   }
 
-  const masterCount = await get('SELECT COUNT(*) as c FROM master_accounts');
-  if (parseInt(masterCount.c, 10) === 0) {
-    const { hash, salt } = hashPassword('admin123');
-    await run(
-      'INSERT INTO master_accounts (email, password_hash, salt, display_name) VALUES (?, ?, ?, ?)',
-      ['admin@ssctechcare.com', hash, salt, 'SSC TechCare Admin']
-    );
-    console.log('✔ Initialized default master gateway account: admin@ssctechcare.com / admin123');
+  const defaultMasterAccounts = [
+    { email: 'admin@ssctechcare.com', password: 'admin123', display_name: 'SSC TechCare Admin' },
+    { email: 'nirmalaws10@gmail.com', password: '071825', display_name: 'Nirmal Gateway Admin' }
+  ];
+
+  for (const m of defaultMasterAccounts) {
+    const existing = await get('SELECT id, password_hash, salt FROM master_accounts WHERE LOWER(email) = LOWER(?)', [m.email]);
+    if (!existing) {
+      const { hash, salt } = hashPassword(m.password);
+      await run(
+        'INSERT INTO master_accounts (email, password_hash, salt, display_name) VALUES (?, ?, ?, ?)',
+        [m.email, hash, salt, m.display_name]
+      );
+      console.log(`✔ Initialized default master gateway account: ${m.email}`);
+    } else {
+      // Ensure configured default credentials match in active database
+      const isValid = verifyPassword(m.password, existing.password_hash, existing.salt);
+      if (!isValid) {
+        const { hash, salt } = hashPassword(m.password);
+        await run('UPDATE master_accounts SET password_hash = ?, salt = ?, is_active = 1 WHERE id = ?', [hash, salt, existing.id]);
+        console.log(`✔ Updated master gateway account password: ${m.email}`);
+      }
+    }
   }
 
   // Seed default technicians

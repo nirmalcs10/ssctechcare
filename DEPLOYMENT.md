@@ -139,7 +139,8 @@ sudo certbot --nginx -d yourdomain.com
 
 | Portal | Username / Email | Password |
 | :--- | :--- | :--- |
-| **Master Gateway** | `admin@ssctechcare.com` | `admin123` |
+| **Master Gateway (Primary)** | `nirmalaws10@gmail.com` | `071825` |
+| **Master Gateway (Default)** | `admin@ssctechcare.com` | `admin123` |
 | **Admin Staff** | `admin` | `admin123` |
 | **Lead Technician** | `tech` | `tech123` |
 | **Front Desk** | `staff` | `staff123` |
