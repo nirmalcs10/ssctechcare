@@ -92,7 +92,7 @@ export default function Settings({ currentUser }) {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'identity' && currentUser?.role !== 'admin') {
+    if ((activeTab === 'identity' || activeTab === 'backup') && currentUser?.role !== 'admin') {
       setActiveTab('account');
     }
   }, [currentUser, activeTab]);
@@ -298,7 +298,7 @@ export default function Settings({ currentUser }) {
   const allTabs = [
     { id: 'account', label: t('account'), icon: User, desc: t('accountDesc') },
     { id: 'identity', label: t('identity'), icon: Building, desc: t('identityDesc'), adminOnly: true },
-    { id: 'backup', label: t('backup'), icon: Database, desc: t('backupDesc') },
+    { id: 'backup', label: t('backup'), icon: Database, desc: t('backupDesc'), adminOnly: true },
     { id: 'appearance', label: t('appearance'), icon: Palette, desc: t('appearanceDesc') },
     { id: 'language', label: t('language'), icon: Globe, desc: t('languageDesc') }
   ];
@@ -394,61 +394,63 @@ export default function Settings({ currentUser }) {
             </div>
           </div>
 
-          {/* Change Password Form */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-              <KeyRound className="w-4 h-4 text-sky-400" />
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Change Password</h3>
+          {/* Change Password Form (Admin only) */}
+          {currentUser?.role === 'admin' && (
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <KeyRound className="w-4 h-4 text-sky-400" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Change Password</h3>
+              </div>
+
+              <form onSubmit={handlePasswordChange} className="space-y-4 max-w-xl">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Current Password *</label>
+                  <input
+                    type="password"
+                    required
+                    value={passwordForm.oldPassword}
+                    onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                    placeholder="Enter current password"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">New Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={passwordForm.newPassword}
+                      onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      placeholder="At least 6 characters"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Confirm New Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={passwordForm.confirmPassword}
+                      onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      placeholder="Re-enter new password"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 transition-all shadow-md shadow-sky-600/20 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {passwordLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                  <span>Update Password</span>
+                </button>
+              </form>
             </div>
-
-            <form onSubmit={handlePasswordChange} className="space-y-4 max-w-xl">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Current Password *</label>
-                <input
-                  type="password"
-                  required
-                  value={passwordForm.oldPassword}
-                  onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
-                  placeholder="Enter current password"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">New Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.newPassword}
-                    onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                    placeholder="At least 6 characters"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Confirm New Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.confirmPassword}
-                    onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                    placeholder="Re-enter new password"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={passwordLoading}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 transition-all shadow-md shadow-sky-600/20 disabled:opacity-50 flex items-center gap-2"
-              >
-                {passwordLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                <span>Update Password</span>
-              </button>
-            </form>
-          </div>
+          )}
 
           {/* Admin Staff User Management */}
           {currentUser?.role === 'admin' && (
@@ -649,8 +651,8 @@ export default function Settings({ currentUser }) {
         </form>
       )}
 
-      {/* TAB 3: BACKUP AND RESTORE */}
-      {activeTab === 'backup' && (
+      {/* TAB 3: BACKUP AND RESTORE (Admin only) */}
+      {activeTab === 'backup' && currentUser?.role === 'admin' && (
         <div className="space-y-6">
           {/* Storage & Record Metrics */}
           {systemStats && (

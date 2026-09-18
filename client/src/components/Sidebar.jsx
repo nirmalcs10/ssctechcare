@@ -44,6 +44,9 @@ export default function Sidebar({
     if (currentUser?.role === 'technician') {
       if (item.id === 'technicians' || item.id === 'customers') return false;
     }
+    if (currentUser?.role === 'frontdesk') {
+      if (item.id === 'technicians') return false;
+    }
     return true;
   });
 

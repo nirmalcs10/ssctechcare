@@ -200,8 +200,8 @@ router.post('/users', requireMasterAuth, requireAuth, requireRole('admin'), asyn
   }
 });
 
-// PUT /api/auth/password - Change authenticated user password (requires Master Gateway)
-router.put('/password', requireMasterAuth, requireAuth, async (req, res) => {
+// PUT /api/auth/password - Change authenticated user password (Admin only, requires Master Gateway)
+router.put('/password', requireMasterAuth, requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     if (!oldPassword || !newPassword) {

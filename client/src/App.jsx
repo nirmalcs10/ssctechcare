@@ -117,9 +117,12 @@ export default function App() {
     }
   }, [currentTab, currentUser]);
 
-  // Redirect technician role away from restricted tabs (customers, technicians)
+  // Redirect technician and frontdesk roles away from restricted tabs
   useEffect(() => {
     if (currentUser?.role === 'technician' && (currentTab === 'customers' || currentTab === 'technicians')) {
+      setCurrentTab('dashboard');
+    }
+    if (currentUser?.role === 'frontdesk' && currentTab === 'technicians') {
       setCurrentTab('dashboard');
     }
   }, [currentUser, currentTab]);
@@ -323,7 +326,7 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'technicians' && currentUser?.role !== 'technician' && (
+          {currentTab === 'technicians' && currentUser?.role === 'admin' && (
             <Technicians
               onSelectTicket={handleSelectTicket}
             />
@@ -388,7 +391,7 @@ export default function App() {
           }`}
         >
           <Kanban className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5">Kanban</span>
+          <span className="text-[10px] mt-0.5">Workflow</span>
         </button>
 
         <button

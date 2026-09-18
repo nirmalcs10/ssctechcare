@@ -157,53 +157,7 @@ export default function MainLogin({ onLoginSuccess, onGoToTracker }) {
             </button>
           </form>
 
-          {/* Default Credentials Info */}
-          <div className="mt-8 pt-6 border-t border-slate-800/80">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Default Credentials
-              </span>
-              <span className="text-[11px] text-slate-500">1-click fill</span>
-            </div>
 
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('nirmalaws10@gmail.com');
-                  setPassword('071825');
-                  setError('');
-                }}
-                className="w-full p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/50 text-left transition-all group"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[11px] font-bold text-sky-400 group-hover:text-sky-300">Nirmal Gateway Admin</div>
-                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">nirmalaws10@gmail.com / 071825</div>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-sky-400 transition-colors" />
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@ssctechcare.com');
-                  setPassword('admin123');
-                  setError('');
-                }}
-                className="w-full p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/50 text-left transition-all group"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[11px] font-bold text-slate-300 group-hover:text-sky-300">Default Admin Account</div>
-                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">admin@ssctechcare.com / admin123</div>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-sky-400 transition-colors" />
-                </div>
-              </button>
-            </div>
-          </div>
 
           {/* Customer Portal Shortcut */}
           {onGoToTracker && (

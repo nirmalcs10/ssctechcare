@@ -219,20 +219,7 @@ export default function Login({ onLoginSuccess, onGoToTracker, onMasterLogout, m
             </div>
           </div>
 
-          {/* Customer Portal Shortcut */}
-          {onGoToTracker && (
-            <div className="mt-6 pt-5 border-t border-slate-800/50 text-center">
-              <p className="text-xs text-slate-400 mb-2">Are you a customer checking a computer in service?</p>
-              <button
-                type="button"
-                onClick={onGoToTracker}
-                className="text-xs font-semibold text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1.5 transition-colors"
-              >
-                <SearchCheck className="w-3.5 h-3.5" />
-                <span>Track Repair Status with Ticket Number</span>
-              </button>
-            </div>
-          )}
+
         </div>
       </main>
 

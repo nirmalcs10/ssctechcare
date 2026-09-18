@@ -5,7 +5,7 @@ export const TRANSLATIONS = {
     // Nav & Common
     dashboard: 'Dashboard',
     tickets: 'Job Tickets',
-    kanban: 'Kanban Bench',
+    kanban: 'Workflow',
     inventory: 'Spare Parts',
     customers: 'Customers',
     invoices: 'Billing & Invoices',
@@ -77,7 +77,7 @@ export const TRANSLATIONS = {
     // Nav & Common
     dashboard: 'டாஷ்போர்டு',
     tickets: 'பழுதுபார்ப்பு டிக்கெட்டுகள்',
-    kanban: 'பணி நிலை பலகை',
+    kanban: 'பணிப்பாய்வு (Workflow)',
     inventory: 'உதிரி பாகங்கள்',
     customers: 'வாடிக்கையாளர்கள்',
     invoices: 'பில் மற்றும் ரசீதுகள்',
@@ -149,7 +149,7 @@ export const TRANSLATIONS = {
     // Nav & Common
     dashboard: 'डैशबोर्ड',
     tickets: 'मरम्मत टिकट',
-    kanban: 'कार्य बेंच (कानबन)',
+    kanban: 'कार्यप्रवाह (Workflow)',
     inventory: 'अतिरिक्त पुर्जे (स्टॉक)',
     customers: 'ग्राहक सूची',
     invoices: 'बिल और चालान',
@@ -221,7 +221,7 @@ export const TRANSLATIONS = {
     // Nav & Common
     dashboard: 'Panel de Control',
     tickets: 'Tickets de Reparación',
-    kanban: 'Mesa Kanban',
+    kanban: 'Flujo de Trabajo (Workflow)',
     inventory: 'Piezas y Repuestos',
     customers: 'Clientes',
     invoices: 'Facturación y Recibos',

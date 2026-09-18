@@ -67,7 +67,7 @@ export default function PublicTrack({ onBackToLogin, isLoggedIn }) {
             onClick={onBackToLogin}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:text-white transition-all shadow-sm"
           >
-            <span>{isLoggedIn ? '← Back to Management Desk' : 'Staff Sign In →'}</span>
+            <span>{isLoggedIn ? '← Back to Management Desk' : '← Back to Login Page'}</span>
           </button>
         </div>
       )}
