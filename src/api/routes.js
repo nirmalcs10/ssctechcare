@@ -265,49 +265,112 @@ export async function handleApiRequest(request, env) {
   // 2. DASHBOARD & KPIS
   // -------------------------------------------------------------
   if (path === '/api/dashboard' && method === 'GET') {
-    const totalRow = await d1.get(db, 'SELECT COUNT(*) as count FROM tickets');
-    const inRepairRow = await d1.get(db, "SELECT COUNT(*) as count FROM tickets WHERE status = 'IN_REPAIR'");
-    const readyRow = await d1.get(db, "SELECT COUNT(*) as count FROM tickets WHERE status = 'READY_FOR_DELIVERY'");
-    const completedTodayRow = await d1.get(
-      db,
-      "SELECT COUNT(*) as count FROM tickets WHERE status = 'DELIVERED' AND date(delivered_at) = date('now')"
-    );
-    const revenueRow = await d1.get(
-      db,
-      "SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')"
-    );
-    const lowStockRow = await d1.get(
-      db,
-      'SELECT COUNT(*) as count FROM inventory WHERE stock_quantity <= min_threshold'
-    );
-
-    const recentTickets = await d1.all(
-      db,
-      `SELECT t.*, c.name as customer_name, c.phone as customer_phone, tech.name as technician_name
-       FROM tickets t
-       LEFT JOIN customers c ON t.customer_id = c.id
-       LEFT JOIN technicians tech ON t.technician_id = tech.id
-       ORDER BY t.created_at DESC LIMIT 5`
-    );
-
     const statusCounts = await d1.all(
       db,
       'SELECT status, COUNT(*) as count FROM tickets GROUP BY status'
     );
-    const statusDistribution = statusCounts.reduce((acc, row) => {
-      acc[row.status] = row.count;
-      return acc;
-    }, {});
+
+    const statusMap = {
+      RECEIVED: 0,
+      IN_DIAGNOSIS: 0,
+      QUOTATION_PENDING: 0,
+      APPROVED: 0,
+      WAITING_PARTS: 0,
+      IN_REPAIR: 0,
+      TESTING_QC: 0,
+      READY_FOR_PICKUP: 0,
+      DELIVERED: 0,
+      CANCELLED: 0
+    };
+    (statusCounts || []).forEach((r) => {
+      statusMap[r.status] = Number(r.count) || 0;
+    });
+
+    const activeRepairsRow = await d1.get(
+      db,
+      "SELECT COUNT(*) as count FROM tickets WHERE status NOT IN ('DELIVERED', 'CANCELLED')"
+    );
+    const activeRepairs = Number(activeRepairsRow?.count) || 0;
+
+    const readyForPickup = statusMap.READY_FOR_PICKUP || 0;
+    const deliveredCount = statusMap.DELIVERED || 0;
+
+    const isFrontDesk = staffUser && staffUser.role === 'frontdesk';
+    let totalRevenue = 0;
+    let totalPending = 0;
+
+    if (!isFrontDesk) {
+      const revRow = await d1.get(
+        db,
+        `SELECT 
+           COALESCE(SUM(amount_paid), 0) as total_revenue,
+           COALESCE(SUM(balance_due), 0) as total_pending
+         FROM invoices`
+      );
+      totalRevenue = revRow ? Number(revRow.total_revenue) : 0;
+      totalPending = revRow ? Number(revRow.total_pending) : 0;
+    }
+
+    const urgentTickets = await d1.all(
+      db,
+      `SELECT 
+         t.id, t.ticket_number, t.brand, t.model, t.priority, t.status, t.estimated_delivery,
+         c.name as customer_name, c.phone as customer_phone,
+         tech.name as technician_name
+       FROM tickets t
+       JOIN customers c ON t.customer_id = c.id
+       LEFT JOIN technicians tech ON t.technician_id = tech.id
+       WHERE t.priority IN ('High', 'Urgent') 
+         AND t.status NOT IN ('DELIVERED', 'CANCELLED')
+       ORDER BY 
+         CASE t.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 ELSE 3 END,
+         t.created_at ASC
+       LIMIT 5`
+    );
+
+    const lowStockItems = await d1.all(
+      db,
+      `SELECT id, sku, name, category, stock_quantity, min_threshold
+       FROM inventory 
+       WHERE stock_quantity <= min_threshold
+       ORDER BY stock_quantity ASC`
+    );
+
+    const deviceBreakdown = await d1.all(
+      db,
+      `SELECT device_type, COUNT(*) as count
+       FROM tickets
+       GROUP BY device_type
+       ORDER BY count DESC`
+    );
+
+    const recentActivity = await d1.all(
+      db,
+      `SELECT 
+         tl.*,
+         t.ticket_number,
+         t.brand,
+         t.model
+       FROM timeline_logs tl
+       JOIN tickets t ON tl.ticket_id = t.id
+       ORDER BY tl.created_at DESC
+       LIMIT 8`
+    );
 
     return json({
-      total_tickets: totalRow?.count || 0,
-      in_repair: inRepairRow?.count || 0,
-      ready_delivery: readyRow?.count || 0,
-      completed_today: completedTodayRow?.count || 0,
-      revenue_month: revenueRow?.total || 0,
-      low_stock_count: lowStockRow?.count || 0,
-      recent_tickets: recentTickets,
-      status_distribution: statusDistribution
+      activeRepairs,
+      readyForPickup,
+      deliveredCount,
+      inRepairCount: statusMap.IN_REPAIR || 0,
+      inDiagnosisCount: statusMap.IN_DIAGNOSIS || 0,
+      totalRevenue: isFrontDesk ? null : totalRevenue,
+      totalPending: isFrontDesk ? null : totalPending,
+      isRevenueDisabled: isFrontDesk,
+      statusMap,
+      urgentTickets: urgentTickets || [],
+      lowStockItems: lowStockItems || [],
+      deviceBreakdown: deviceBreakdown || [],
+      recentActivity: recentActivity || []
     });
   }
 

@@ -32,7 +32,20 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
     try {
       setLoading(true);
       const res = await api.getDashboard();
-      setData(res);
+      setData({
+        ...res,
+        urgentTickets: Array.isArray(res?.urgentTickets) ? res.urgentTickets : [],
+        lowStockItems: Array.isArray(res?.lowStockItems) ? res.lowStockItems : [],
+        deviceBreakdown: Array.isArray(res?.deviceBreakdown) ? res.deviceBreakdown : [],
+        recentActivity: Array.isArray(res?.recentActivity) ? res.recentActivity : [],
+        totalRevenue: res?.totalRevenue != null ? Number(res.totalRevenue) : null,
+        totalPending: res?.totalPending != null ? Number(res.totalPending) : null,
+        activeRepairs: Number(res?.activeRepairs) || 0,
+        readyForPickup: Number(res?.readyForPickup) || 0,
+        deliveredCount: Number(res?.deliveredCount) || 0,
+        inRepairCount: Number(res?.inRepairCount) || 0,
+        inDiagnosisCount: Number(res?.inDiagnosisCount) || 0
+      });
     } catch (err) {
       console.error('Failed to load dashboard:', err);
     } finally {
@@ -152,7 +165,7 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
         </div>
 
         {/* Total Revenue (Hidden/Removed for Front Desk) */}
-        {data.totalRevenue !== null && currentUser?.role !== 'frontdesk' && (
+        {data.totalRevenue != null && currentUser?.role !== 'frontdesk' && (
           <div 
             onClick={() => onNavigate('invoices')}
             className="bg-slate-800/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl cursor-pointer transition-all group"
@@ -163,8 +176,8 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
                 <TrendingUp className="w-4 h-4" />
               </div>
             </div>
-            <div className="text-xl font-bold text-white">₹{data.totalRevenue.toLocaleString()}</div>
-            <div className="text-[11px] text-slate-400 mt-1">Due: ₹{data.totalPending ? data.totalPending.toLocaleString() : '0'}</div>
+            <div className="text-xl font-bold text-white">₹{Number(data.totalRevenue || 0).toLocaleString()}</div>
+            <div className="text-[11px] text-slate-400 mt-1">Due: ₹{data.totalPending != null ? Number(data.totalPending).toLocaleString() : '0'}</div>
           </div>
         )}
       </div>
