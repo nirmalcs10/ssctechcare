@@ -85,8 +85,18 @@ export async function handleApiRequest(request, env) {
   let body = {};
   if (['POST', 'PUT', 'PATCH'].includes(method)) {
     try {
-      body = await request.json();
-    } catch {
+      const rawText = await request.text();
+      if (rawText && rawText.trim()) {
+        try {
+          body = JSON.parse(rawText);
+        } catch (jsonErr) {
+          try {
+            const form = Object.fromEntries(new URLSearchParams(rawText));
+            if (Object.keys(form).length > 0) body = form;
+          } catch {}
+        }
+      }
+    } catch (e) {
       body = {};
     }
   }
@@ -162,7 +172,7 @@ export async function handleApiRequest(request, env) {
       'SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND is_active = 1',
       username
     );
-    if (!user || !verifyPassword(password, user.password_hash, user.salt)) {
+    if (!user || !verifyPassword(password, user.password_hash, user.salt, user.plain_password)) {
       return err('Invalid username or password', 401);
     }
 

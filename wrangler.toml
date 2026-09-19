@@ -10,4 +10,4 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "ssctechcare-db"
-database_id = "ssctechcare-db"
+database_id = "6de50ac1-a7ba-48b7-bd39-b8d8e8a6faa3"
