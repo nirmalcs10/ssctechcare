@@ -44,10 +44,22 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
 
   useEffect(() => {
     if (preselectedTicketId) {
+      // Check if invoice already exists for this ticket
+      const existing = invoices.find(inv => String(inv.ticket_id) === String(preselectedTicketId));
+      if (existing) {
+        if (Number(existing.balance_due) > 0) {
+          setPayInvoice(existing);
+          setPayAmount(String(existing.balance_due));
+          setIsPayOpen(true);
+        } else {
+          onPrintInvoice(existing.id);
+        }
+        return;
+      }
       setSelectedTicketId(preselectedTicketId);
       setIsCreateOpen(true);
     }
-  }, [preselectedTicketId]);
+  }, [preselectedTicketId, invoices]);
 
   useEffect(() => {
     if (selectedTicketId) {
@@ -134,6 +146,23 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
         amount: parseFloat(payAmount),
         payment_method: payMethod
       });
+
+      if (payInvoice.ticket_id) {
+        try {
+          const t = await api.getTicket(payInvoice.ticket_id);
+          if (t && t.status === 'READY_FOR_PICKUP') {
+            if (confirm(`Payment recorded. Ticket ${t.ticket_number} is currently 'Ready for Pickup'. Mark device as DELIVERED now?`)) {
+              await api.updateTicketStatus(
+                t.id,
+                'DELIVERED',
+                `Payment of ₹${parseFloat(payAmount).toLocaleString()} recorded via ${payMethod}. Device delivered to customer.`,
+                'Billing'
+              );
+            }
+          }
+        } catch (ignoreErr) {}
+      }
+
       setIsPayOpen(false);
       setPayInvoice(null);
       setPayAmount('');

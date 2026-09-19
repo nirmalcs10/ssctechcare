@@ -23,7 +23,10 @@ import {
   Activity,
   Cpu,
   Edit,
-  X
+  X,
+  Truck,
+  CreditCard,
+  CheckCircle2
 } from 'lucide-react';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
@@ -49,7 +52,9 @@ export default function TicketDetail({
   onPrintJobCard, 
   onGenerateInvoice, 
   onViewInvoice,
-  currentUser
+  currentUser,
+  initialAction,
+  onClearAction
 }) {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -73,10 +78,142 @@ export default function TicketDetail({
   const [reassignTechId, setReassignTechId] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
 
+  // Delivery & Payment Modal state
+  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [deliveryPaymentMethod, setDeliveryPaymentMethod] = useState('Cash');
+  const [deliveryPaymentAmount, setDeliveryPaymentAmount] = useState('');
+  const [deliveryMarkDelivered, setDeliveryMarkDelivered] = useState(true);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryLaborCharges, setDeliveryLaborCharges] = useState('800');
+  const [deliveryTaxRate, setDeliveryTaxRate] = useState('18');
+  const [deliveryDiscount, setDeliveryDiscount] = useState('0');
+  const [deliveryNotes, setDeliveryNotes] = useState('Device delivered and handed over to customer.');
+
   useEffect(() => {
     loadTicketData();
     loadAuxData();
   }, [ticketId]);
+
+  useEffect(() => {
+    if (initialAction === 'deliver' && ticket) {
+      handleOpenDelivery();
+      if (onClearAction) onClearAction();
+    }
+  }, [initialAction, ticket]);
+
+  const handleOpenDelivery = () => {
+    if (ticket?.invoice) {
+      setDeliveryPaymentAmount(String(ticket.invoice.balance_due ?? 0));
+    } else {
+      const pSum = (ticket?.parts || []).reduce((acc, p) => acc + (p.total_price || 0), 0);
+      const labor = (ticket?.parts && ticket.parts.length > 0) ? 1200 : 800;
+      setDeliveryLaborCharges(String(labor));
+      const sub = pSum + labor;
+      const tax = (sub * 18) / 100;
+      const grand = sub + tax;
+      const adv = parseFloat(ticket?.advance_paid || 0);
+      setDeliveryPaymentAmount(String(Math.max(0, Math.round(grand - adv))));
+    }
+    setIsDeliveryModalOpen(true);
+  };
+
+  const handleRecordDeliveryPayment = async (e) => {
+    if (e) e.preventDefault();
+    if (!ticket?.invoice) return;
+
+    const amt = parseFloat(deliveryPaymentAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Please enter a valid payment amount');
+      return;
+    }
+
+    setDeliveryLoading(true);
+    try {
+      await api.recordPayment(ticket.invoice.id, {
+        amount: amt,
+        payment_method: deliveryPaymentMethod
+      });
+
+      if (deliveryMarkDelivered) {
+        await api.updateTicketStatus(
+          ticket.id,
+          'DELIVERED',
+          `Device handed over to customer. Collected ₹${amt.toLocaleString()} via ${deliveryPaymentMethod}.`,
+          currentUser?.fullName || 'Staff'
+        );
+      }
+
+      setIsDeliveryModalOpen(false);
+      await loadTicketData();
+    } catch (err) {
+      alert('Payment recording failed: ' + err.message);
+    } finally {
+      setDeliveryLoading(false);
+    }
+  };
+
+  const handleQuickInvoiceAndDeliver = async (e) => {
+    if (e) e.preventDefault();
+    setDeliveryLoading(true);
+    try {
+      const labor = parseFloat(deliveryLaborCharges) || 0;
+      const taxR = parseFloat(deliveryTaxRate) || 0;
+      const disc = parseFloat(deliveryDiscount) || 0;
+      const pSum = (ticket.parts || []).reduce((acc, p) => acc + (p.total_price || 0), 0);
+      const sub = pSum + labor;
+      const taxA = (sub * taxR) / 100;
+      const grand = Math.max(0, sub + taxA - disc);
+      const adv = parseFloat(ticket.advance_paid || 0);
+      const paidNow = deliveryPaymentAmount !== '' ? parseFloat(deliveryPaymentAmount) : Math.max(0, grand - adv);
+
+      const newInv = await api.createInvoice({
+        ticket_id: ticket.id,
+        labor_charges: labor,
+        parts_total: pSum,
+        tax_rate: taxR,
+        discount: disc,
+        advance_deducted: adv,
+        amount_paid: paidNow,
+        payment_method: deliveryPaymentMethod,
+        notes: deliveryNotes
+      });
+
+      if (deliveryMarkDelivered) {
+        await api.updateTicketStatus(
+          ticket.id,
+          'DELIVERED',
+          `Device handed over to customer. Invoice ${newInv.invoice_number} generated with ₹${paidNow.toLocaleString()} collected via ${deliveryPaymentMethod}.`,
+          currentUser?.fullName || 'Staff'
+        );
+      }
+
+      setIsDeliveryModalOpen(false);
+      await loadTicketData();
+    } catch (err) {
+      alert('Failed to generate invoice & deliver: ' + err.message);
+    } finally {
+      setDeliveryLoading(false);
+    }
+  };
+
+  const handleConfirmDirectDelivery = async () => {
+    if (!confirm('Mark device as Delivered & handed over to customer?')) return;
+    setDeliveryLoading(true);
+    try {
+      await api.updateTicketStatus(
+        ticket.id,
+        'DELIVERED',
+        'Device handed over to customer.',
+        currentUser?.fullName || 'Staff'
+      );
+      setIsDeliveryModalOpen(false);
+      await loadTicketData();
+    } catch (err) {
+      alert('Failed to update status: ' + err.message);
+    } finally {
+      setDeliveryLoading(false);
+    }
+  };
 
   const handleReassignTechnician = async (e) => {
     e.preventDefault();
@@ -118,6 +255,10 @@ export default function TicketDetail({
   };
 
   const handleStatusChange = async (newStatus) => {
+    if (newStatus === 'DELIVERED') {
+      handleOpenDelivery();
+      return;
+    }
     try {
       await api.updateTicketStatus(ticket.id, newStatus, '', 'Technician');
       loadTicketData();
@@ -242,6 +383,18 @@ export default function TicketDetail({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Deliver Device Button (When Ready for Pickup or Delivered) */}
+          {ticket.status === 'READY_FOR_PICKUP' && (
+            <button
+              onClick={handleOpenDelivery}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 transition-all active:scale-95 animate-pulse"
+              title="Deliver Device & Settle Payment"
+            >
+              <Truck className="w-4 h-4" />
+              <span>Deliver Device</span>
+            </button>
+          )}
+
           {/* Print Job Card Button */}
           <button
             onClick={() => onPrintJobCard(ticket.id)}
@@ -273,6 +426,52 @@ export default function TicketDetail({
           )}
         </div>
       </div>
+
+      {/* Ready for Pickup Delivery & Payment Banner */}
+      {ticket.status === 'READY_FOR_PICKUP' && (
+        <div className="bg-gradient-to-r from-emerald-950/70 via-slate-900 to-emerald-950/50 border border-emerald-500/40 rounded-2xl p-4.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl shadow-emerald-950/30">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+              <Truck className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Device Ready for Pickup & Handover</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Ready for Delivery
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Repairs and quality testing are completed. Hand over the device to {ticket.customer_name} and settle any remaining balance.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleOpenDelivery}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all shrink-0 active:scale-95"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Deliver & Go to Payment</span>
+          </button>
+        </div>
+      )}
+
+      {/* Delivered Notification Banner */}
+      {ticket.status === 'DELIVERED' && (
+        <div className="bg-slate-900/60 border border-slate-700/60 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-slate-300">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>This device has been handed over and marked as <strong className="text-emerald-400">Delivered</strong>.</span>
+          </div>
+          <button
+            onClick={handleOpenDelivery}
+            className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1.5 transition-colors font-medium"
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Delivery & Settlement Summary</span>
+          </button>
+        </div>
+      )}
 
       {/* Interactive Workflow Status Transition Bar */}
       <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-800">
@@ -826,6 +1025,390 @@ export default function TicketDetail({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery & Payment Handover Modal */}
+      {isDeliveryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scaleIn">
+            {/* Modal Header */}
+            <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Device Delivery & Payment Handover</h3>
+                  <p className="text-xs text-slate-400">
+                    Ticket <span className="font-mono text-sky-400 font-semibold">{ticket.ticket_number}</span> • {ticket.customer_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDeliveryModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-5 text-xs">
+              {/* Device Profile Card */}
+              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Device Handover</span>
+                  <p className="text-sm font-bold text-white mt-0.5">{ticket.brand} {ticket.model}</p>
+                  <p className="text-[11px] text-slate-400 font-mono">SN: {ticket.serial_number || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Customer</span>
+                  <p className="text-xs font-semibold text-slate-200 mt-0.5">{ticket.customer_name}</p>
+                  <p className="text-[11px] text-sky-400">{ticket.customer_phone}</p>
+                </div>
+              </div>
+
+              {/* SCENARIO 1: INVOICE EXISTS */}
+              {ticket.invoice ? (
+                <div className="space-y-4">
+                  {/* Invoice Summary Card */}
+                  <div className="p-4 bg-slate-800/60 rounded-2xl border border-slate-700 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="w-4 h-4 text-sky-400" />
+                        <span className="font-bold text-white">Invoice #{ticket.invoice.invoice_number}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        Number(ticket.invoice.balance_due) <= 0.01 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {ticket.invoice.payment_status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                      <div className="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Total Amount</span>
+                        <span className="text-xs font-bold text-white mt-0.5 block">
+                          ₹{parseFloat(ticket.invoice.grand_total || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Paid Earlier</span>
+                        <span className="text-xs font-bold text-emerald-400 mt-0.5 block">
+                          ₹{parseFloat(ticket.invoice.amount_paid || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Balance Due</span>
+                        <span className={`text-xs font-bold mt-0.5 block ${Number(ticket.invoice.balance_due) > 0 ? 'text-amber-400 font-extrabold' : 'text-slate-400'}`}>
+                          ₹{parseFloat(ticket.invoice.balance_due || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Form (if balance due > 0) */}
+                  {Number(ticket.invoice.balance_due) > 0 ? (
+                    <form onSubmit={handleRecordDeliveryPayment} className="space-y-4">
+                      <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl space-y-3">
+                        <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                          <CreditCard className="w-4 h-4" />
+                          <span>Payment Settlement Option</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-slate-300 font-medium mb-1">
+                              Payment Amount to Collect (₹)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-slate-500 font-bold">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                max={ticket.invoice.balance_due}
+                                value={deliveryPaymentAmount}
+                                onChange={e => setDeliveryPaymentAmount(e.target.value)}
+                                className="w-full pl-7 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                required
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-400 mt-1 block">
+                              Outstanding: ₹{parseFloat(ticket.invoice.balance_due).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-slate-300 font-medium mb-1">
+                              Payment Method
+                            </label>
+                            <select
+                              value={deliveryPaymentMethod}
+                              onChange={e => setDeliveryPaymentMethod(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="Cash">Cash</option>
+                              <option value="UPI / QR">UPI / QR Code</option>
+                              <option value="Card">Credit / Debit Card</option>
+                              <option value="Bank Transfer">Bank Transfer / NEFT</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer pt-1">
+                          <input
+                            type="checkbox"
+                            checked={deliveryMarkDelivered}
+                            onChange={e => setDeliveryMarkDelivered(e.target.checked)}
+                            className="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-slate-300 text-[11px]">
+                            Update ticket status to <strong>DELIVERED</strong> upon recording payment
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => onViewInvoice(ticket.invoice.id)}
+                          className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1.5"
+                        >
+                          <Receipt className="w-3.5 h-3.5" />
+                          <span>View Full Invoice</span>
+                        </button>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => setIsDeliveryModalOpen(false)}
+                            className="flex-1 sm:flex-none px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl font-medium"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={deliveryLoading}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            <span>
+                              {deliveryLoading ? 'Processing...' : `Collect ₹${deliveryPaymentAmount || 0} & Deliver`}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  ) : (
+                    /* Invoice is Fully Paid */
+                    <div className="space-y-4">
+                      <div className="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-bold text-white text-xs">Invoice is Fully Settled</h4>
+                          <p className="text-[11px] text-slate-300 mt-0.5">
+                            Customer has settled all dues in full (₹0 balance). You can hand over the device and confirm delivery.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setIsDeliveryModalOpen(false)}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl font-medium"
+                        >
+                          Close
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onViewInvoice(ticket.invoice.id)}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 rounded-xl font-medium"
+                        >
+                          Print Invoice
+                        </button>
+                        {ticket.status !== 'DELIVERED' && (
+                          <button
+                            type="button"
+                            onClick={handleConfirmDirectDelivery}
+                            disabled={deliveryLoading}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 active:scale-95 disabled:opacity-50"
+                          >
+                            <Truck className="w-4 h-4" />
+                            <span>{deliveryLoading ? 'Saving...' : 'Confirm Delivery & Handover'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* SCENARIO 2: NO INVOICE GENERATED YET */
+                <div className="space-y-4">
+                  <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-amber-300 text-xs">No Invoice Generated Yet</h4>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        An invoice is needed to collect final payment and hand over the device. You can quickly settle below or open the full invoice page.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Financial Details */}
+                  <div className="p-4 bg-slate-800/40 rounded-2xl border border-slate-700/80 space-y-2.5">
+                    <div className="flex justify-between text-slate-300">
+                      <span>Spare Parts Incurred:</span>
+                      <span className="font-semibold text-white">₹{partsTotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Advance Deposit Paid:</span>
+                      <span className="font-semibold text-emerald-400">-₹{parseFloat(ticket.advance_paid || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Initial Estimated Cost:</span>
+                      <span className="font-semibold text-slate-400">₹{parseFloat(ticket.estimated_cost || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Quick Settle & Delivery Form */}
+                  <form onSubmit={handleQuickInvoiceAndDeliver} className="space-y-3 p-4 bg-slate-800/60 rounded-2xl border border-slate-700">
+                    <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <CreditCard className="w-4 h-4 text-emerald-400" />
+                        <span>Quick Settle & Bill</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onGenerateInvoice(ticket.id)}
+                        className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 underline"
+                      >
+                        Open Full Invoice Page
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Labor (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={deliveryLaborCharges}
+                          onChange={e => {
+                            setDeliveryLaborCharges(e.target.value);
+                            const l = parseFloat(e.target.value) || 0;
+                            const t = parseFloat(deliveryTaxRate) || 0;
+                            const sub = partsTotal + l;
+                            const tot = sub + (sub * t) / 100 - (parseFloat(deliveryDiscount) || 0);
+                            setDeliveryPaymentAmount(String(Math.max(0, Math.round(tot - parseFloat(ticket.advance_paid || 0)))));
+                          }}
+                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Tax (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={deliveryTaxRate}
+                          onChange={e => {
+                            setDeliveryTaxRate(e.target.value);
+                            const l = parseFloat(deliveryLaborCharges) || 0;
+                            const t = parseFloat(e.target.value) || 0;
+                            const sub = partsTotal + l;
+                            const tot = sub + (sub * t) / 100 - (parseFloat(deliveryDiscount) || 0);
+                            setDeliveryPaymentAmount(String(Math.max(0, Math.round(tot - parseFloat(ticket.advance_paid || 0)))));
+                          }}
+                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Discount (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={deliveryDiscount}
+                          onChange={e => {
+                            setDeliveryDiscount(e.target.value);
+                            const l = parseFloat(deliveryLaborCharges) || 0;
+                            const t = parseFloat(deliveryTaxRate) || 0;
+                            const sub = partsTotal + l;
+                            const tot = sub + (sub * t) / 100 - (parseFloat(e.target.value) || 0);
+                            setDeliveryPaymentAmount(String(Math.max(0, Math.round(tot - parseFloat(ticket.advance_paid || 0)))));
+                          }}
+                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      <div>
+                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Amount to Pay Now (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={deliveryPaymentAmount}
+                          onChange={e => setDeliveryPaymentAmount(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-emerald-400 font-bold text-xs"
+                          placeholder="Amount paid"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Payment Method</label>
+                        <select
+                          value={deliveryPaymentMethod}
+                          onChange={e => setDeliveryPaymentMethod(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="UPI / QR">UPI / QR Code</option>
+                          <option value="Card">Credit / Debit Card</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={deliveryMarkDelivered}
+                        onChange={e => setDeliveryMarkDelivered(e.target.checked)}
+                        className="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-slate-300 text-[11px]">
+                        Mark repair job as <strong>DELIVERED</strong> after invoice generation
+                      </span>
+                    </label>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => setIsDeliveryModalOpen(false)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl font-medium text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={deliveryLoading}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/30 text-xs transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>{deliveryLoading ? 'Generating...' : 'Bill, Collect & Deliver'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

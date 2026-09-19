@@ -9,7 +9,8 @@ import {
   Laptop, 
   Clock, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Truck
 } from 'lucide-react';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
@@ -260,6 +261,15 @@ export default function Tickets({ onSelectTicket, onOpenNewTicket, onPrintJobCar
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
+                        {ticket.status === 'READY_FOR_PICKUP' && (
+                          <button
+                            onClick={() => onSelectTicket(ticket.id, 'deliver')}
+                            className="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 transition-all shadow-sm shadow-emerald-500/10"
+                            title="Deliver Device & Settle Payment"
+                          >
+                            <Truck className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => onSelectTicket(ticket.id)}
                           className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"

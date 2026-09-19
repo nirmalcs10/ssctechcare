@@ -28,6 +28,7 @@ export default function App() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [ticketInitialAction, setTicketInitialAction] = useState(null);
   const [invoicePreselectId, setInvoicePreselectId] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -144,8 +145,9 @@ export default function App() {
   };
 
   // Ticket selection
-  const handleSelectTicket = (id) => {
+  const handleSelectTicket = (id, action = null) => {
     setSelectedTicketId(id);
+    setTicketInitialAction(action);
     setCurrentTab('ticket-detail');
   };
 
@@ -294,11 +296,17 @@ export default function App() {
           {currentTab === 'ticket-detail' && selectedTicketId && (
             <TicketDetail
               ticketId={selectedTicketId}
-              onBack={() => setCurrentTab('tickets')}
+              onBack={() => {
+                setSelectedTicketId(null);
+                setTicketInitialAction(null);
+                setCurrentTab('tickets');
+              }}
               onPrintJobCard={handlePrintJobCard}
               onGenerateInvoice={handleGenerateInvoiceFromTicket}
               onViewInvoice={handlePrintInvoice}
               currentUser={currentUser}
+              initialAction={ticketInitialAction}
+              onClearAction={() => setTicketInitialAction(null)}
             />
           )}
 

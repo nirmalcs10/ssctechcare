@@ -9,7 +9,8 @@ import {
   User, 
   Laptop, 
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Truck
 } from 'lucide-react';
 import { api } from '../api';
 import PriorityBadge from '../components/PriorityBadge';
@@ -191,7 +192,18 @@ export default function KanbanBoard({ onSelectTicket, onOpenNewTicket }) {
                             <span>Next</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
-                        ) : <div />}
+                        ) : (
+                          col.id === 'READY_FOR_PICKUP' ? (
+                            <button
+                              onClick={() => onSelectTicket(ticket.id, 'deliver')}
+                              className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 font-bold ml-auto text-[10px] shadow shadow-emerald-600/30 transition-all active:scale-95"
+                              title="Deliver Device & Go to Payment"
+                            >
+                              <Truck className="w-3 h-3" />
+                              <span>Deliver</span>
+                            </button>
+                          ) : <div />
+                        )}
                       </div>
                     </div>
                   ))
