@@ -17,6 +17,33 @@ export function err(message, status = 400) {
   return json({ error: message }, status);
 }
 
+// Safely parse JSON strings with fallback
+function safeParse(val, fallback) {
+  if (!val) return fallback;
+  if (typeof val !== 'string') return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return fallback;
+  }
+}
+
+// PII Masking helpers for public responses
+function maskName(name) {
+  if (!name || typeof name !== 'string') return 'Customer';
+  return name.trim().split(/\s+/).map(part => {
+    if (part.length <= 2) return part[0] + '*';
+    return part[0] + '*'.repeat(Math.min(part.length - 2, 6)) + part[part.length - 1];
+  }).join(' ');
+}
+
+function maskPhone(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length <= 4) return '****';
+  return '*'.repeat(Math.min(digits.length - 4, 6)) + digits.slice(-4);
+}
+
 // Auth extraction helper
 async function getAuthContext(request, db) {
   const authHeader = request.headers.get('Authorization') || '';
@@ -29,7 +56,7 @@ async function getAuthContext(request, db) {
   if (token) {
     staffUser = await d1.get(
       db,
-      `SELECT u.id, u.username, u.full_name, u.role, u.is_active, s.expires_at 
+      `SELECT u.id, u.username, u.plain_password, u.full_name, u.role, u.is_active, s.expires_at 
        FROM user_sessions s 
        JOIN users u ON s.user_id = u.id 
        WHERE s.token = ?`,
@@ -51,26 +78,40 @@ async function getAuthContext(request, db) {
   return { staffUser, masterUser, token, masterToken };
 }
 
-// Generate sequential ticket number
+// Generate sequential ticket number (REP-YYYY-000X)
 async function generateTicketNumber(db) {
   const year = new Date().getFullYear();
-  const countRow = await d1.get(
+  const lastTicket = await d1.get(
     db,
-    `SELECT COUNT(*) as count FROM tickets WHERE ticket_number LIKE ?`,
-    `TC-${year}-%`
+    `SELECT ticket_number FROM tickets ORDER BY id DESC LIMIT 1`
   );
+  if (!lastTicket) return `REP-${year}-0001`;
+
+  const match = lastTicket.ticket_number?.match(/REP-(\d+)-(\d+)/);
+  if (match) {
+    const nextNum = parseInt(match[2], 10) + 1;
+    return `REP-${year}-${String(nextNum).padStart(4, '0')}`;
+  }
+  const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM tickets');
   const nextNum = (countRow?.count || 0) + 1;
-  return `TC-${year}-${String(nextNum).padStart(4, '0')}`;
+  return `REP-${year}-${String(nextNum).padStart(4, '0')}`;
 }
 
-// Generate sequential invoice number
+// Generate sequential invoice number (INV-YYYY-000X)
 async function generateInvoiceNumber(db) {
   const year = new Date().getFullYear();
-  const countRow = await d1.get(
+  const lastInv = await d1.get(
     db,
-    `SELECT COUNT(*) as count FROM invoices WHERE invoice_number LIKE ?`,
-    `INV-${year}-%`
+    `SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1`
   );
+  if (!lastInv) return `INV-${year}-0001`;
+
+  const match = lastInv.invoice_number?.match(/INV-(\d+)-(\d+)/);
+  if (match) {
+    const nextNum = parseInt(match[2], 10) + 1;
+    return `INV-${year}-${String(nextNum).padStart(4, '0')}`;
+  }
+  const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM invoices');
   const nextNum = (countRow?.count || 0) + 1;
   return `INV-${year}-${String(nextNum).padStart(4, '0')}`;
 }
@@ -81,7 +122,7 @@ export async function handleApiRequest(request, env) {
   const path = url.pathname;
   const method = request.method.toUpperCase();
 
-  // Parse body safely for write methods
+  // Parse body safely for write methods (JSON, raw text, or form-urlencoded)
   let body = {};
   if (['POST', 'PUT', 'PATCH'].includes(method)) {
     try {
@@ -89,19 +130,19 @@ export async function handleApiRequest(request, env) {
       if (rawText && rawText.trim()) {
         try {
           body = JSON.parse(rawText);
-        } catch (jsonErr) {
+        } catch {
           try {
             const form = Object.fromEntries(new URLSearchParams(rawText));
             if (Object.keys(form).length > 0) body = form;
           } catch {}
         }
       }
-    } catch (e) {
+    } catch {
       body = {};
     }
   }
 
-  const { staffUser, masterUser } = await getAuthContext(request, db);
+  const { staffUser, masterUser, token, masterToken } = await getAuthContext(request, db);
 
   // -------------------------------------------------------------
   // 1. AUTHENTICATION & USERS
@@ -121,18 +162,18 @@ export async function handleApiRequest(request, env) {
       return err('Invalid master gateway credentials', 401);
     }
 
-    const token = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const sessionToken = generateToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     await d1.run(
       db,
       'INSERT INTO master_sessions (token, master_account_id, expires_at) VALUES (?, ?, ?)',
-      token, account.id, expiresAt
+      sessionToken, account.id, expiresAt
     );
     await d1.run(db, 'UPDATE master_accounts SET last_login = CURRENT_TIMESTAMP WHERE id = ?', account.id);
 
     return json({
-      masterToken: token,
+      masterToken: sessionToken,
       masterUser: {
         id: account.id,
         email: account.email,
@@ -155,11 +196,29 @@ export async function handleApiRequest(request, env) {
 
   // Master Logout
   if (path === '/api/auth/master-logout' && method === 'POST') {
-    const { masterToken } = await getAuthContext(request, db);
     if (masterToken) {
       await d1.run(db, 'DELETE FROM master_sessions WHERE token = ?', masterToken);
     }
     return json({ success: true });
+  }
+
+  // Change Master Password
+  if (path === '/api/auth/master-password' && method === 'PUT') {
+    const { oldPassword, newPassword } = body;
+    if (!oldPassword || !newPassword) return err('Both current password and new password are required', 400);
+    if (newPassword.length < 6) return err('New password must be at least 6 characters long', 400);
+
+    const targetId = masterUser?.id || 1;
+    const account = await d1.get(db, 'SELECT * FROM master_accounts WHERE id = ?', targetId);
+    if (!account) return err('Master account not found', 404);
+
+    if (!verifyPassword(oldPassword, account.password_hash, account.salt)) {
+      return err('Current password is incorrect', 400);
+    }
+
+    const { hash, salt } = hashPassword(newPassword);
+    await d1.run(db, 'UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?', hash, salt, account.id);
+    return json({ success: true, message: 'Master password updated successfully' });
   }
 
   // Staff Login
@@ -176,18 +235,18 @@ export async function handleApiRequest(request, env) {
       return err('Invalid username or password', 401);
     }
 
-    const token = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const sessionToken = generateToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     await d1.run(
       db,
       'INSERT INTO user_sessions (token, user_id, expires_at) VALUES (?, ?, ?)',
-      token, user.id, expiresAt
+      sessionToken, user.id, expiresAt
     );
     await d1.run(db, 'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', user.id);
 
     return json({
-      token,
+      token: sessionToken,
       user: {
         id: user.id,
         username: user.username,
@@ -212,7 +271,6 @@ export async function handleApiRequest(request, env) {
 
   // Staff Logout
   if (path === '/api/auth/logout' && method === 'POST') {
-    const { token } = await getAuthContext(request, db);
     if (token) {
       await d1.run(db, 'DELETE FROM user_sessions WHERE token = ?', token);
     }
@@ -245,6 +303,32 @@ export async function handleApiRequest(request, env) {
     return json({ id: res.lastInsertRowid, username, fullName, role }, 201);
   }
 
+  // Change Staff Password
+  if (path === '/api/auth/password' && method === 'PUT') {
+    const { oldPassword, newPassword, userId } = body;
+    const targetUserId = userId || staffUser?.id || 1;
+
+    if (!newPassword || newPassword.length < 6) {
+      return err('New password must be at least 6 characters long', 400);
+    }
+
+    const user = await d1.get(db, 'SELECT * FROM users WHERE id = ?', targetUserId);
+    if (!user) return err('User not found', 404);
+
+    if (oldPassword && !verifyPassword(oldPassword, user.password_hash, user.salt, user.plain_password)) {
+      return err('Current password is incorrect', 400);
+    }
+
+    const { hash, salt } = hashPassword(newPassword);
+    await d1.run(
+      db,
+      'UPDATE users SET password_hash = ?, salt = ?, plain_password = ? WHERE id = ?',
+      hash, salt, newPassword, user.id
+    );
+
+    return json({ success: true, message: 'Password updated successfully' });
+  }
+
   // Toggle Staff User Status
   const userToggleMatch = path.match(/^\/api\/auth\/users\/(\d+)\/toggle$/);
   if (userToggleMatch && method === 'PUT') {
@@ -257,6 +341,7 @@ export async function handleApiRequest(request, env) {
   const userDeleteMatch = path.match(/^\/api\/auth\/users\/(\d+)$/);
   if (userDeleteMatch && method === 'DELETE') {
     const userId = userDeleteMatch[1];
+    if (userId === '1') return err('Primary administrator account cannot be deleted', 400);
     await d1.run(db, 'DELETE FROM users WHERE id = ?', userId);
     return json({ success: true });
   }
@@ -386,7 +471,9 @@ export async function handleApiRequest(request, env) {
     const techId = url.searchParams.get('technician_id') || '';
 
     let sql = `
-      SELECT t.*, c.name as customer_name, c.phone as customer_phone, tech.name as technician_name
+      SELECT t.*, c.name as customer_name, c.phone as customer_phone, c.email as customer_email,
+             tech.name as technician_name,
+             (SELECT COUNT(*) FROM ticket_parts WHERE ticket_id = t.id) as parts_count
       FROM tickets t
       LEFT JOIN customers c ON t.customer_id = c.id
       LEFT JOIN technicians tech ON t.technician_id = tech.id
@@ -395,15 +482,15 @@ export async function handleApiRequest(request, env) {
     const params = [];
 
     if (search) {
-      sql += ` AND (t.ticket_number LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR t.model LIKE ?)`;
+      sql += ` AND (t.ticket_number LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR t.model LIKE ? OR t.brand LIKE ?)`;
       const term = `%${search}%`;
-      params.push(term, term, term, term);
+      params.push(term, term, term, term, term);
     }
-    if (status) {
+    if (status && status !== 'ALL') {
       sql += ` AND t.status = ?`;
       params.push(status);
     }
-    if (priority) {
+    if (priority && priority !== 'ALL') {
       sql += ` AND t.priority = ?`;
       params.push(priority);
     }
@@ -457,8 +544,10 @@ export async function handleApiRequest(request, env) {
         estimated_delivery, advance_paid, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       ticketNumber, customer_id, device_type || 'Laptop', brand || '', model || '',
-      serial_number || '', device_password || '', accessories || '', physical_condition || '',
-      typeof inspection_checklist === 'object' ? JSON.stringify(inspection_checklist) : (inspection_checklist || ''),
+      serial_number || '', device_password || '',
+      typeof accessories === 'object' ? JSON.stringify(accessories) : (accessories || '[]'),
+      typeof physical_condition === 'object' ? JSON.stringify(physical_condition) : (physical_condition || '[]'),
+      typeof inspection_checklist === 'object' ? JSON.stringify(inspection_checklist) : (inspection_checklist || '{}'),
       problem_description, priority || 'Normal', technician_id || null,
       Number(estimated_cost) || 0, estimated_delivery || null, Number(advance_paid) || 0
     );
@@ -492,9 +581,32 @@ export async function handleApiRequest(request, env) {
     );
     if (!ticket) return err('Ticket not found', 404);
 
-    const parts = await d1.all(db, 'SELECT * FROM ticket_parts WHERE ticket_id = ? ORDER BY id ASC', ticketId);
-    const timeline = await d1.all(db, 'SELECT * FROM timeline_logs WHERE ticket_id = ? ORDER BY created_at DESC', ticketId);
-    const invoice = await d1.get(db, 'SELECT * FROM invoices WHERE ticket_id = ?', ticketId);
+    // Parse JSON string fields safely for frontend components
+    ticket.accessories = safeParse(ticket.accessories, []);
+    ticket.physical_condition = safeParse(ticket.physical_condition, []);
+    ticket.inspection_checklist = safeParse(ticket.inspection_checklist, {});
+
+    const parts = await d1.all(
+      db,
+      `SELECT tp.*, i.sku, i.category
+       FROM ticket_parts tp
+       LEFT JOIN inventory i ON tp.inventory_id = i.id
+       WHERE tp.ticket_id = ?
+       ORDER BY tp.created_at ASC`,
+      ticketId
+    );
+
+    const timeline = await d1.all(
+      db,
+      'SELECT * FROM timeline_logs WHERE ticket_id = ? ORDER BY created_at DESC',
+      ticketId
+    );
+
+    const invoice = await d1.get(
+      db,
+      'SELECT * FROM invoices WHERE ticket_id = ? ORDER BY id DESC LIMIT 1',
+      ticketId
+    );
 
     return json({ ...ticket, parts, timeline, invoice });
   }
@@ -514,7 +626,7 @@ export async function handleApiRequest(request, env) {
       if (body[key] !== undefined) {
         updates.push(`${key} = ?`);
         let val = body[key];
-        if (key === 'inspection_checklist' && typeof val === 'object') {
+        if (['accessories', 'physical_condition', 'inspection_checklist'].includes(key) && typeof val === 'object') {
           val = JSON.stringify(val);
         } else if (key === 'technician_id' && (val === '' || val === undefined)) {
           val = null;
@@ -722,14 +834,20 @@ export async function handleApiRequest(request, env) {
   // -------------------------------------------------------------
   if (path === '/api/customers' && method === 'GET') {
     const search = url.searchParams.get('search') || '';
-    let sql = 'SELECT * FROM customers WHERE 1=1';
+    let sql = `
+      SELECT c.*,
+             (SELECT COUNT(*) FROM tickets WHERE customer_id = c.id) as ticket_count,
+             (SELECT COALESCE(SUM(grand_total), 0) FROM invoices WHERE customer_id = c.id) as total_spent
+      FROM customers c
+      WHERE 1=1
+    `;
     const params = [];
     if (search) {
-      sql += ' AND (name LIKE ? OR phone LIKE ? OR email LIKE ?)';
+      sql += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)';
       const t = `%${search}%`;
       params.push(t, t, t);
     }
-    sql += ' ORDER BY name ASC';
+    sql += ' ORDER BY c.name ASC';
     const customers = await d1.all(db, sql, ...params);
     return json(customers);
   }
@@ -771,8 +889,32 @@ export async function handleApiRequest(request, env) {
     return json(updated);
   }
 
+  // Delete Customer (supports force=true to cascade delete associated tickets & invoices)
   if (customerDetailMatch && method === 'DELETE') {
-    await d1.run(db, 'DELETE FROM customers WHERE id = ?', customerDetailMatch[1]);
+    const customerId = customerDetailMatch[1];
+    const force = url.searchParams.get('force') === 'true';
+
+    const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM tickets WHERE customer_id = ?', customerId);
+    const ticketCount = Number(countRow?.count) || 0;
+
+    if (ticketCount > 0 && !force) {
+      return err(
+        `Cannot delete customer with ${ticketCount} existing repair ticket(s). Confirm force deletion to remove customer along with associated repair records.`,
+        400
+      );
+    }
+
+    if (ticketCount > 0 && force) {
+      await d1.run(db, 'DELETE FROM invoices WHERE customer_id = ?', customerId);
+      const tickets = await d1.all(db, 'SELECT id FROM tickets WHERE customer_id = ?', customerId);
+      for (const t of tickets) {
+        await d1.run(db, 'DELETE FROM ticket_parts WHERE ticket_id = ?', t.id);
+        await d1.run(db, 'DELETE FROM timeline_logs WHERE ticket_id = ?', t.id);
+      }
+      await d1.run(db, 'DELETE FROM tickets WHERE customer_id = ?', customerId);
+    }
+
+    await d1.run(db, 'DELETE FROM customers WHERE id = ?', customerId);
     return json({ success: true });
   }
 
@@ -780,7 +922,13 @@ export async function handleApiRequest(request, env) {
   // 6. TECHNICIANS
   // -------------------------------------------------------------
   if (path === '/api/technicians' && method === 'GET') {
-    const techs = await d1.all(db, 'SELECT * FROM technicians ORDER BY name ASC');
+    const techs = await d1.all(
+      db,
+      `SELECT tech.*,
+              (SELECT COUNT(*) FROM tickets WHERE technician_id = tech.id AND status NOT IN ('DELIVERED', 'CANCELLED')) as active_jobs
+       FROM technicians tech
+       ORDER BY tech.name ASC`
+    );
     return json(techs);
   }
 
@@ -811,13 +959,24 @@ export async function handleApiRequest(request, env) {
   }
 
   if (techDetailMatch && method === 'DELETE') {
-    await d1.run(db, 'DELETE FROM technicians WHERE id = ?', techDetailMatch[1]);
+    const techId = techDetailMatch[1];
+    // Safely unassign technician from existing tickets before deletion
+    await d1.run(db, 'UPDATE tickets SET technician_id = NULL WHERE technician_id = ?', techId);
+    await d1.run(db, 'DELETE FROM technicians WHERE id = ?', techId);
     return json({ success: true });
   }
 
   const techTicketsMatch = path.match(/^\/api\/technicians\/(\d+)\/tickets$/);
   if (techTicketsMatch && method === 'GET') {
-    const tickets = await d1.all(db, 'SELECT * FROM tickets WHERE technician_id = ? ORDER BY created_at DESC', techTicketsMatch[1]);
+    const tickets = await d1.all(
+      db,
+      `SELECT t.*, c.name as customer_name, c.phone as customer_phone
+       FROM tickets t
+       JOIN customers c ON t.customer_id = c.id
+       WHERE t.technician_id = ?
+       ORDER BY t.created_at DESC`,
+      techTicketsMatch[1]
+    );
     return json(tickets);
   }
 
@@ -826,18 +985,26 @@ export async function handleApiRequest(request, env) {
   // -------------------------------------------------------------
   if (path === '/api/invoices' && method === 'GET') {
     const search = url.searchParams.get('search') || '';
+    const status = url.searchParams.get('status') || '';
     let sql = `
-      SELECT inv.*, c.name as customer_name, c.phone as customer_phone, t.ticket_number
+      SELECT inv.*, c.name as customer_name, c.phone as customer_phone,
+             t.ticket_number, t.brand as device_brand, t.model as device_model
       FROM invoices inv
       LEFT JOIN customers c ON inv.customer_id = c.id
       LEFT JOIN tickets t ON inv.ticket_id = t.id
       WHERE 1=1
     `;
     const params = [];
+
+    if (status && status !== 'ALL') {
+      sql += ` AND inv.payment_status = ?`;
+      params.push(status);
+    }
+
     if (search) {
-      sql += ' AND (inv.invoice_number LIKE ? OR c.name LIKE ? OR t.ticket_number LIKE ?)';
+      sql += ' AND (inv.invoice_number LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR t.ticket_number LIKE ?)';
       const term = `%${search}%`;
-      params.push(term, term, term);
+      params.push(term, term, term, term);
     }
     sql += ' ORDER BY inv.created_at DESC';
     const invoices = await d1.all(db, sql, ...params);
@@ -849,11 +1016,13 @@ export async function handleApiRequest(request, env) {
     const id = invoiceDetailMatch[1];
     const invoice = await d1.get(
       db,
-      `SELECT inv.*, c.name as customer_name, c.phone as customer_phone, c.address as customer_address,
-              t.ticket_number, t.brand, t.model, t.problem_description
+      `SELECT inv.*, c.name as customer_name, c.phone as customer_phone, c.email as customer_email, c.address as customer_address,
+              t.ticket_number, t.device_type, t.brand as device_brand, t.model as device_model, t.serial_number,
+              t.problem_description, t.diagnosis_notes, tech.name as technician_name
        FROM invoices inv
        LEFT JOIN customers c ON inv.customer_id = c.id
        LEFT JOIN tickets t ON inv.ticket_id = t.id
+       LEFT JOIN technicians tech ON t.technician_id = tech.id
        WHERE inv.id = ?`,
       id
     );
@@ -863,24 +1032,45 @@ export async function handleApiRequest(request, env) {
     if (invoice.ticket_id) {
       parts = await d1.all(db, 'SELECT * FROM ticket_parts WHERE ticket_id = ?', invoice.ticket_id);
     }
-    return json({ ...invoice, parts });
+
+    const settings = await d1.get(db, 'SELECT * FROM settings WHERE id = 1');
+
+    return json({ ...invoice, parts, settings });
   }
 
   if (path === '/api/invoices' && method === 'POST') {
     const { ticket_id, customer_id, labor_charges, parts_total, tax_rate, discount, advance_deducted, amount_paid, payment_method, notes } = body;
-    if (!customer_id) return err('Customer ID is required', 400);
 
-    const labor = Number(labor_charges) || 0;
-    const parts = Number(parts_total) || 0;
-    const subtotal = labor + parts;
-    const rate = Number(tax_rate) || 0;
-    const taxAmount = (subtotal * rate) / 100;
-    const disc = Number(discount) || 0;
-    const grandTotal = Math.max(0, subtotal + taxAmount - disc);
-    const adv = Number(advance_deducted) || 0;
-    const paid = Number(amount_paid) || 0;
-    const balanceDue = Math.max(0, grandTotal - adv - paid);
-    const paymentStatus = balanceDue === 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Unpaid');
+    let targetCustomerId = customer_id;
+    let targetAdvance = Number(advance_deducted) || 0;
+
+    // If ticket_id provided, verify ticket & existing invoice
+    if (ticket_id) {
+      const ticket = await d1.get(db, 'SELECT * FROM tickets WHERE id = ?', ticket_id);
+      if (!ticket) return err('Ticket not found', 404);
+      targetCustomerId = targetCustomerId || ticket.customer_id;
+      targetAdvance = targetAdvance || Number(ticket.advance_paid || 0);
+
+      const existingInv = await d1.get(db, 'SELECT invoice_number FROM invoices WHERE ticket_id = ?', ticket_id);
+      if (existingInv) {
+        return err(`An invoice (${existingInv.invoice_number}) already exists for this repair job`, 409);
+      }
+    }
+
+    if (!targetCustomerId) return err('Customer ID is required', 400);
+
+    const labor = Math.max(0, Number(labor_charges) || 0);
+    const parts = Math.max(0, Number(parts_total) || 0);
+    const subtotal = Math.round((labor + parts) * 100) / 100;
+    const rate = Math.max(0, Math.min(100, Number(tax_rate) || 0));
+    const taxAmount = Math.round(((subtotal * rate) / 100) * 100) / 100;
+    const disc = Math.max(0, Number(discount) || 0);
+    const grandTotal = Math.max(0, Math.round((subtotal + taxAmount - disc) * 100) / 100);
+    const adv = Math.max(0, targetAdvance);
+    const paid = Math.max(0, Number(amount_paid) || 0);
+    const totalPaid = Math.round((adv + paid) * 100) / 100;
+    const balanceDue = Math.max(0, Math.round((grandTotal - totalPaid) * 100) / 100);
+    const paymentStatus = balanceDue <= 0.01 ? 'Paid' : (totalPaid > 0 ? 'Partial' : 'Unpaid');
 
     const invoiceNumber = await generateInvoiceNumber(db);
 
@@ -889,12 +1079,20 @@ export async function handleApiRequest(request, env) {
       `INSERT INTO invoices (
         invoice_number, ticket_id, customer_id, labor_charges, parts_total,
         subtotal, tax_rate, tax_amount, discount, grand_total, advance_deducted,
-        amount_paid, balance_due, payment_method, payment_status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      invoiceNumber, ticket_id || null, customer_id, labor, parts,
-      subtotal, rate, taxAmount, disc, grandTotal, adv, paid, balanceDue,
+        amount_paid, balance_due, payment_method, payment_status, notes, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      invoiceNumber, ticket_id || null, targetCustomerId, labor, parts,
+      subtotal, rate, taxAmount, disc, grandTotal, adv, totalPaid, balanceDue,
       payment_method || 'Cash', paymentStatus, notes || ''
     );
+
+    if (ticket_id) {
+      await d1.run(
+        db,
+        'INSERT INTO timeline_logs (ticket_id, action, description, actor) VALUES (?, ?, ?, ?)',
+        ticket_id, 'Invoice Generated', `Invoice ${invoiceNumber} generated for ₹${grandTotal.toLocaleString()}. Status: ${paymentStatus}`, 'Billing'
+      );
+    }
 
     const created = await d1.get(db, 'SELECT * FROM invoices WHERE id = ?', res.lastInsertRowid);
     return json(created, 201);
@@ -905,13 +1103,18 @@ export async function handleApiRequest(request, env) {
     const id = invoicePaymentMatch[1];
     const { amount, payment_method } = body;
     const payment = Number(amount) || 0;
+    if (payment <= 0) return err('Valid payment amount required', 400);
 
     const inv = await d1.get(db, 'SELECT * FROM invoices WHERE id = ?', id);
     if (!inv) return err('Invoice not found', 404);
 
-    const newPaid = inv.amount_paid + payment;
-    const newBalance = Math.max(0, inv.grand_total - inv.advance_deducted - newPaid);
-    const newStatus = newBalance === 0 ? 'Paid' : 'Partial';
+    if (Number(inv.balance_due) <= 0) {
+      return err('Invoice is already fully paid', 400);
+    }
+
+    const newPaid = Math.round((inv.amount_paid + payment) * 100) / 100;
+    const newBalance = Math.max(0, Math.round((inv.grand_total - newPaid) * 100) / 100);
+    const newStatus = newBalance <= 0.01 ? 'Paid' : 'Partial';
 
     await d1.run(
       db,
@@ -924,7 +1127,7 @@ export async function handleApiRequest(request, env) {
   }
 
   // -------------------------------------------------------------
-  // 8. SETTINGS
+  // 8. SETTINGS, STATS, BACKUP & RESTORE
   // -------------------------------------------------------------
   if (path === '/api/settings' && method === 'GET') {
     let settings = await d1.get(db, 'SELECT * FROM settings LIMIT 1');
@@ -962,7 +1165,7 @@ export async function handleApiRequest(request, env) {
     const invCount = await d1.get(db, 'SELECT COUNT(*) as c FROM invoices');
 
     return json({
-      engine: 'cloudflare-d1',
+      engine: 'Cloudflare D1 (Edge SQLite)',
       tables: 12,
       tickets: tCount?.c || 0,
       customers: cCount?.c || 0,
@@ -971,17 +1174,171 @@ export async function handleApiRequest(request, env) {
     });
   }
 
+  // Export System Backup JSON
+  if (path === '/api/settings/backup' && method === 'GET') {
+    const tableNames = [
+      'settings',
+      'customers',
+      'technicians',
+      'inventory',
+      'tickets',
+      'ticket_parts',
+      'timeline_logs',
+      'invoices',
+      'users',
+      'master_accounts'
+    ];
+    const backupData = {
+      app: 'SSC TechCare Service Center Management System',
+      version: '2.0.0',
+      database: 'Cloudflare D1',
+      exported_at: new Date().toISOString(),
+      tables: {}
+    };
+    for (const tbl of tableNames) {
+      backupData.tables[tbl] = await d1.all(db, `SELECT * FROM ${tbl} ORDER BY id ASC`);
+    }
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return json(backupData, 200, {
+      'Content-Disposition': `attachment; filename="SSC_TechCare_Backup_${dateStr}.json"`
+    });
+  }
+
+  // Restore System Backup JSON
+  if (path === '/api/settings/restore' && method === 'POST') {
+    let backupData = body;
+    if (typeof body === 'string') {
+      try {
+        backupData = JSON.parse(body);
+      } catch {
+        return err('Invalid JSON backup file', 400);
+      }
+    }
+    if (!backupData?.tables) return err('Backup file does not contain valid table data', 400);
+
+    const { tables } = backupData;
+    const required = ['settings', 'customers', 'technicians', 'inventory', 'tickets'];
+    for (const req of required) {
+      if (!tables[req]) return err(`Missing required table in backup: ${req}`, 400);
+    }
+
+    // Clear tables in reverse dependency order
+    const clearOrder = ['timeline_logs', 'ticket_parts', 'invoices', 'tickets', 'inventory', 'technicians', 'customers', 'settings'];
+    for (const t of clearOrder) {
+      await d1.run(db, `DELETE FROM ${t}`);
+    }
+
+    // Restore settings
+    if (tables.settings?.length > 0) {
+      const s = tables.settings[0];
+      await d1.run(
+        db,
+        `INSERT OR REPLACE INTO settings (id, shop_name, shop_phone, shop_email, shop_address, tax_rate, currency_symbol, terms_conditions, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        s.shop_name, s.shop_phone, s.shop_email, s.shop_address, s.tax_rate || 18, s.currency_symbol || '₹', s.terms_conditions || ''
+      );
+    }
+
+    // Restore customers
+    for (const c of (tables.customers || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO customers (id, name, phone, alt_phone, email, address, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        c.id, c.name, c.phone, c.alt_phone, c.email, c.address, c.notes, c.created_at || new Date().toISOString()
+      );
+    }
+
+    // Restore technicians
+    for (const tech of (tables.technicians || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO technicians (id, name, phone, email, specialization, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        tech.id, tech.name, tech.phone, tech.email, tech.specialization, tech.status || 'Active', tech.created_at || new Date().toISOString()
+      );
+    }
+
+    // Restore inventory
+    for (const inv of (tables.inventory || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO inventory (id, sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        inv.id, inv.sku, inv.name, inv.category, inv.brand_compat, inv.serial_no || null,
+        inv.cost_price || 0, inv.selling_price || 0, inv.stock_quantity || 0, inv.min_threshold || 3, inv.location || '', inv.created_at || new Date().toISOString()
+      );
+    }
+
+    // Restore tickets
+    for (const tk of (tables.tickets || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO tickets (
+          id, ticket_number, customer_id, device_type, brand, model, serial_number, device_password,
+          accessories, physical_condition, inspection_checklist, problem_description, diagnosis_notes,
+          internal_notes, priority, status, technician_id, estimated_cost, estimated_delivery,
+          customer_approved, advance_paid, created_at, updated_at, delivered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        tk.id, tk.ticket_number, tk.customer_id, tk.device_type, tk.brand, tk.model, tk.serial_number, tk.device_password,
+        typeof tk.accessories === 'object' ? JSON.stringify(tk.accessories) : tk.accessories,
+        typeof tk.physical_condition === 'object' ? JSON.stringify(tk.physical_condition) : tk.physical_condition,
+        typeof tk.inspection_checklist === 'object' ? JSON.stringify(tk.inspection_checklist) : tk.inspection_checklist,
+        tk.problem_description, tk.diagnosis_notes, tk.internal_notes, tk.priority, tk.status, tk.technician_id,
+        tk.estimated_cost, tk.estimated_delivery, tk.customer_approved || 0, tk.advance_paid || 0,
+        tk.created_at || new Date().toISOString(), tk.updated_at || new Date().toISOString(), tk.delivered_at
+      );
+    }
+
+    // Restore ticket_parts
+    for (const tp of (tables.ticket_parts || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO ticket_parts (id, ticket_id, inventory_id, part_name, serial_no, quantity, unit_price, total_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        tp.id, tp.ticket_id, tp.inventory_id, tp.part_name, tp.serial_no || null, tp.quantity || 1, tp.unit_price || 0, tp.total_price || 0, tp.created_at || new Date().toISOString()
+      );
+    }
+
+    // Restore timeline_logs
+    for (const tl of (tables.timeline_logs || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO timeline_logs (id, ticket_id, action, description, actor, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        tl.id, tl.ticket_id, tl.action, tl.description, tl.actor || 'Staff', tl.created_at || new Date().toISOString()
+      );
+    }
+
+    // Restore invoices
+    for (const inv of (tables.invoices || [])) {
+      await d1.run(
+        db,
+        `INSERT INTO invoices (
+          id, invoice_number, ticket_id, customer_id, labor_charges, parts_total, subtotal,
+          tax_rate, tax_amount, discount, grand_total, advance_deducted, amount_paid,
+          balance_due, payment_method, payment_status, notes, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        inv.id, inv.invoice_number, inv.ticket_id, inv.customer_id, inv.labor_charges || 0, inv.parts_total || 0, inv.subtotal || 0,
+        inv.tax_rate || 0, inv.tax_amount || 0, inv.discount || 0, inv.grand_total || 0, inv.advance_deducted || 0, inv.amount_paid || 0,
+        inv.balance_due || 0, inv.payment_method || 'Cash', inv.payment_status || 'Unpaid', inv.notes || '', inv.created_at || new Date().toISOString()
+      );
+    }
+
+    return json({ success: true, message: 'Database restored successfully from backup' });
+  }
+
   // -------------------------------------------------------------
-  // 9. PUBLIC TRACKING LOOKUP
+  // 9. PUBLIC TRACKING LOOKUP (With PII Masking)
   // -------------------------------------------------------------
   const trackMatch = path.match(/^\/api\/track\/(.+)$/);
   if (trackMatch && method === 'GET') {
     const identifier = decodeURIComponent(trackMatch[1]).trim();
+    if (!identifier || identifier.length < 3 || identifier.length > 50) {
+      return err('Please provide a valid ticket number or phone number', 400);
+    }
+
     const ticket = await d1.get(
       db,
       `SELECT t.ticket_number, t.device_type, t.brand, t.model, t.problem_description,
               t.status, t.priority, t.estimated_cost, t.estimated_delivery, t.created_at, t.delivered_at,
-              c.name as customer_name
+              c.name as customer_name, c.phone as customer_phone
        FROM tickets t
        LEFT JOIN customers c ON t.customer_id = c.id
        WHERE t.ticket_number = ? OR c.phone = ?
@@ -997,14 +1354,21 @@ export async function handleApiRequest(request, env) {
       ticket.ticket_number
     );
 
-    return json({ ticket, timeline });
+    return json({
+      ticket: {
+        ...ticket,
+        customer_name: maskName(ticket.customer_name),
+        customer_phone: maskPhone(ticket.customer_phone)
+      },
+      timeline: timeline || []
+    });
   }
 
   // -------------------------------------------------------------
   // 10. HEALTH CHECK
   // -------------------------------------------------------------
   if (path === '/api/health') {
-    return json({ status: 'ok', engine: 'cloudflare-d1', time: new Date().toISOString() });
+    return json({ status: 'ok', engine: 'Cloudflare D1 (Edge SQLite)', time: new Date().toISOString() });
   }
 
   return err(`API endpoint ${method} ${path} not found`, 404);
