@@ -42,7 +42,7 @@ export default function Sidebar({
 
   const navItems = allNavItems.filter(item => {
     if (currentUser?.role === 'technician') {
-      if (item.id === 'technicians' || item.id === 'customers') return false;
+      if (item.id === 'technicians' || item.id === 'customers' || item.id === 'invoices') return false;
     }
     if (currentUser?.role === 'frontdesk') {
       if (item.id === 'technicians') return false;

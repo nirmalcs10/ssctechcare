@@ -20,9 +20,9 @@ router.get('/', async (req, res) => {
     }
 
     if (search) {
-      query += ' AND (sku ILIKE ? OR name ILIKE ? OR brand_compat ILIKE ? OR location ILIKE ?)';
+      query += ' AND (sku ILIKE ? OR name ILIKE ? OR brand_compat ILIKE ? OR location ILIKE ? OR serial_no ILIKE ?)';
       const s = `%${search}%`;
-      params.push(s, s, s, s);
+      params.push(s, s, s, s, s);
     }
 
     query += ' ORDER BY category ASC, name ASC';
@@ -69,25 +69,39 @@ router.get('/:id', async (req, res) => {
 // POST add new inventory item
 router.post('/', async (req, res) => {
   try {
-    const { sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
+    let { sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
 
-    if (!sku || !name || !category) {
-      return res.status(400).json({ error: 'SKU, Name, and Category are required' });
+    if (!category) {
+      return res.status(400).json({ error: 'Category is required' });
+    }
+
+    if (!sku) {
+      if (serial_no && serial_no.trim()) {
+        sku = serial_no.trim();
+      } else {
+        const catPrefix = category.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'PART';
+        sku = `${catPrefix}-${Date.now().toString().slice(-6)}`;
+      }
+    }
+
+    if (!name) {
+      name = brand_compat ? `${brand_compat} ${category}` : `${category} ${serial_no ? '(' + serial_no + ')' : 'Spare'}`;
     }
 
     const existing = await db.prepare('SELECT id FROM inventory WHERE sku = ?').get(sku);
     if (existing) {
-      return res.status(400).json({ error: `Part with SKU "${sku}" already exists` });
+      return res.status(400).json({ error: `Part with SKU / Serial "${sku}" already exists` });
     }
 
     const insert = await db.prepare(`
-      INSERT INTO inventory (sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO inventory (sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(
       sku,
       name,
       category,
       brand_compat || '',
+      serial_no || '',
       parseFloat(cost_price || 0),
       parseFloat(selling_price || 0),
       parseInt(stock_quantity || 0, 10),
@@ -104,7 +118,7 @@ router.post('/', async (req, res) => {
 // PUT update inventory item
 router.put('/:id', async (req, res) => {
   try {
-    const { sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
+    const { sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
 
     await db.prepare(`
       UPDATE inventory SET
@@ -112,13 +126,14 @@ router.put('/:id', async (req, res) => {
         name = COALESCE(?, name),
         category = COALESCE(?, category),
         brand_compat = COALESCE(?, brand_compat),
+        serial_no = COALESCE(?, serial_no),
         cost_price = COALESCE(?, cost_price),
         selling_price = COALESCE(?, selling_price),
         stock_quantity = COALESCE(?, stock_quantity),
         min_threshold = COALESCE(?, min_threshold),
         location = COALESCE(?, location)
       WHERE id = ?
-    `).run(sku, name, category, brand_compat, cost_price, selling_price, stock_quantity, min_threshold, location, req.params.id);
+    `).run(sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location, req.params.id);
 
     res.json({ message: 'Item updated successfully' });
   } catch (error) {

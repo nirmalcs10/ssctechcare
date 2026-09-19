@@ -130,21 +130,49 @@ async function runTests() {
     });
     assert('Transition Ticket Status', statusRes.status === 200 && statusRes.data.status === 'IN_REPAIR');
 
+    // 6b. Test Reassign & Unassign Technician
+    const reassignRes = await request('PUT', `/api/tickets/${createdTicketId}`, { technician_id: 1 });
+    assert('Reassign Technician to Ticket', reassignRes.status === 200);
+
+    const ticketAfterReassign = await request('GET', `/api/tickets/${createdTicketId}`);
+    assert('Ticket Reflects Reassigned Technician', ticketAfterReassign.data.technician_id === 1);
+
+    const unassignRes = await request('PUT', `/api/tickets/${createdTicketId}`, { technician_id: '' });
+    assert('Unassign Technician from Ticket', unassignRes.status === 200);
+
+    const ticketAfterUnassign = await request('GET', `/api/tickets/${createdTicketId}`);
+    assert('Ticket Reflects Unassigned Technician', ticketAfterUnassign.data.technician_id === null);
+
     // 7. Check Inventory Stock before attaching part
-    const invItem = await request('GET', '/api/inventory/1');
-    const initialStock = invItem.data.stock_quantity;
+    const allInv = await request('GET', '/api/inventory');
+    let targetInv = Array.isArray(allInv.data) ? allInv.data.find(i => i.stock_quantity > 0) : null;
+    if (!targetInv) {
+      await request('POST', '/api/inventory/1/adjust', { change: 10, reason: 'Test replenish' });
+      targetInv = (await request('GET', '/api/inventory/1')).data;
+    }
+    const initialStock = targetInv.stock_quantity;
 
     // 8. Attach spare part to ticket
     const addPartRes = await request('POST', `/api/tickets/${createdTicketId}/parts`, {
-      inventory_id: 1,
-      part_name: invItem.data.name,
+      inventory_id: targetInv.id,
+      part_name: targetInv.name,
       quantity: 1,
-      unit_price: invItem.data.selling_price
+      unit_price: targetInv.selling_price
     });
     assert('Attach Spare Part to Ticket', addPartRes.status === 201);
 
+    // 8b. Attach custom "Other" spare part with optional serial_no
+    const addCustomPartRes = await request('POST', `/api/tickets/${createdTicketId}/parts`, {
+      inventory_id: null,
+      part_name: 'Custom Thermal Paste Application',
+      serial_no: 'SN-TP-99881',
+      quantity: 1,
+      unit_price: 250
+    });
+    assert('Attach Custom Part with Optional Serial No', addCustomPartRes.status === 201 && addCustomPartRes.data.id > 0);
+
     // Verify inventory decremented
-    const invAfterAdd = await request('GET', '/api/inventory/1');
+    const invAfterAdd = await request('GET', `/api/inventory/${targetInv.id}`);
     assert('Inventory Auto-Decremented', invAfterAdd.data.stock_quantity === initialStock - 1);
 
     // 9. Generate Invoice for Ticket
@@ -192,6 +220,21 @@ async function runTests() {
     // 13. Settings endpoint
     const settingsRes = await request('GET', '/api/settings');
     assert('Fetch Settings', settingsRes.status === 200 && settingsRes.data.shop_name.length > 0);
+
+    // 14. Staff Users List with plain_password
+    const usersRes = await request('GET', '/api/auth/users');
+    const hasPasswords = usersRes.status === 200 && Array.isArray(usersRes.data) && usersRes.data.some(u => u.plain_password === 'admin123');
+    assert('Staff Users List includes plain_password', hasPasswords);
+
+    // 15. Inventory Item with Category dropdown (auto-generated SKU and name)
+    const newInvRes = await request('POST', '/api/inventory', {
+      name: '1TB NVMe PCIe 4.0 SSD',
+      category: 'Storage',
+      brand_compat: 'Samsung 980 Pro',
+      selling_price: 4500,
+      stock_quantity: 5
+    });
+    assert('Create Inventory Item with Category & Full Part Name', newInvRes.status === 201 && newInvRes.data.id > 0);
 
     console.log(`\n=== TEST SUMMARY: ${passCount} PASSED, ${failCount} FAILED ===\n`);
     process.exit(failCount > 0 ? 1 : 0);

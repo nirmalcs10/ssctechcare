@@ -8,7 +8,6 @@ import {
   ShieldCheck, 
   ArrowRight, 
   AlertCircle, 
-  SearchCheck,
   CheckCircle2,
   Cpu
 } from 'lucide-react';
@@ -39,12 +38,6 @@ export default function Login({ onLoginSuccess, onGoToTracker, onMasterLogout, m
     }
   };
 
-  const fillCredentials = (u, p) => {
-    setUsername(u);
-    setPassword(p);
-    setError('');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-sky-500 selection:text-white relative overflow-hidden">
       {/* Background ambient lighting */}
@@ -68,15 +61,6 @@ export default function Login({ onLoginSuccess, onGoToTracker, onMasterLogout, m
           </div>
         </div>
 
-        {onGoToTracker && (
-          <button
-            onClick={onGoToTracker}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-all"
-          >
-            <SearchCheck className="w-4 h-4 text-sky-400" />
-            <span>Customer Track Portal</span>
-          </button>
-        )}
       </header>
 
       {/* Center Auth Card */}
@@ -179,47 +163,6 @@ export default function Login({ onLoginSuccess, onGoToTracker, onMasterLogout, m
               )}
             </button>
           </form>
-
-          {/* Quick Demo Accounts */}
-          <div className="mt-8 pt-6 border-t border-slate-800/80">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Quick Demo Credentials
-              </span>
-              <span className="text-[11px] text-slate-500">1-click fill</span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => fillCredentials('admin', 'admin123')}
-                className="p-2.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/50 text-left transition-all group"
-              >
-                <div className="text-[11px] font-bold text-sky-400 group-hover:text-sky-300">Admin</div>
-                <div className="text-[10px] text-slate-400 font-mono">admin123</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fillCredentials('tech', 'tech123')}
-                className="p-2.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-amber-500/50 text-left transition-all group"
-              >
-                <div className="text-[11px] font-bold text-amber-400 group-hover:text-amber-300">Tech</div>
-                <div className="text-[10px] text-slate-400 font-mono">tech123</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fillCredentials('staff', 'staff123')}
-                className="p-2.5 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-emerald-500/50 text-left transition-all group"
-              >
-                <div className="text-[11px] font-bold text-emerald-400 group-hover:text-emerald-300">Staff</div>
-                <div className="text-[10px] text-slate-400 font-mono">staff123</div>
-              </button>
-            </div>
-          </div>
-
-
         </div>
       </main>
 

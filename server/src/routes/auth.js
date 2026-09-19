@@ -158,7 +158,7 @@ router.post('/logout', requireMasterAuth, requireAuth, async (req, res) => {
 router.get('/users', requireMasterAuth, requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const users = await db.prepare(`
-      SELECT id, username, full_name, role, is_active, created_at, last_login
+      SELECT id, username, full_name, role, is_active, plain_password, created_at, last_login
       FROM users ORDER BY id ASC
     `).all();
     return res.json(users);
@@ -182,9 +182,9 @@ router.post('/users', requireMasterAuth, requireAuth, requireRole('admin'), asyn
 
     const { hash, salt } = db.hashPassword(password);
     const result = await db.prepare(`
-      INSERT INTO users (username, password_hash, salt, full_name, role, created_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(username.trim(), hash, salt, fullName.trim(), role);
+      INSERT INTO users (username, password_hash, salt, plain_password, full_name, role, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(username.trim(), hash, salt, password, fullName.trim(), role);
 
     return res.status(201).json({
       success: true,
@@ -224,8 +224,8 @@ router.put('/password', requireMasterAuth, requireAuth, requireRole('admin'), as
 
     const { hash, salt } = db.hashPassword(newPassword);
     await db.prepare(`
-      UPDATE users SET password_hash = ?, salt = ? WHERE id = ?
-    `).run(hash, salt, user.id);
+      UPDATE users SET password_hash = ?, salt = ?, plain_password = ? WHERE id = ?
+    `).run(hash, salt, newPassword, user.id);
 
     // Revoke all other active sessions for this user
     await db.prepare(`

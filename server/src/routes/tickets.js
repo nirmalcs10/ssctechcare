@@ -214,17 +214,18 @@ router.post('/', async (req, res) => {
     const ticketId = insert.lastInsertRowid;
 
     // Log timeline
+    const nowIso = new Date().toISOString();
     await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Ticket Created', ?, 'Front Desk', CURRENT_TIMESTAMP)
-    `).run(ticketId, `Job card created for ${brand} ${model}. Reported issue: ${problem_description}`);
+      VALUES (?, 'Ticket Created', ?, 'Front Desk', ?)
+    `).run(ticketId, `Job card created for ${brand} ${model}. Reported issue: ${problem_description}`, nowIso);
 
     if (technician_id) {
       const tech = await db.prepare('SELECT name FROM technicians WHERE id = ?').get(technician_id);
       await db.prepare(`
         INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-        VALUES (?, 'Assigned', ?, 'System', CURRENT_TIMESTAMP)
-      `).run(ticketId, `Assigned to ${tech ? tech.name : 'Technician'}`);
+        VALUES (?, 'Assigned', ?, 'System', ?)
+      `).run(ticketId, `Assigned to ${tech ? tech.name : 'Technician'}`, nowIso);
     }
 
     res.status(201).json({
@@ -319,16 +320,16 @@ router.put('/:id', async (req, res) => {
       const newTech = targetTechId ? await db.prepare('SELECT name FROM technicians WHERE id = ?').get(targetTechId) : null;
       await db.prepare(`
         INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-        VALUES (?, 'Technician Reassigned', ?, 'Staff', CURRENT_TIMESTAMP)
-      `).run(req.params.id, newTech ? `Reassigned to ${newTech.name}` : 'Unassigned from technician');
+        VALUES (?, 'Technician Reassigned', ?, 'Staff', ?)
+      `).run(req.params.id, newTech ? `Reassigned to ${newTech.name}` : 'Unassigned from technician', new Date().toISOString());
     }
 
     // If status changed, record in timeline
     if (status && status !== oldTicket.status) {
       await db.prepare(`
         INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-        VALUES (?, 'Status Changed', ?, 'Staff', CURRENT_TIMESTAMP)
-      `).run(req.params.id, `Status updated from ${oldTicket.status} to ${status}`);
+        VALUES (?, 'Status Changed', ?, 'Staff', ?)
+      `).run(req.params.id, `Status updated from ${oldTicket.status} to ${status}`, new Date().toISOString());
 
       if (status === 'DELIVERED') {
         await db.prepare("UPDATE tickets SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?").run(req.params.id);
@@ -357,8 +358,8 @@ router.post('/:id/status', async (req, res) => {
     const desc = note ? `Status changed to ${status}: ${note}` : `Status changed from ${ticket.status} to ${status}`;
     await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Status Changed', ?, ?, CURRENT_TIMESTAMP)
-    `).run(req.params.id, desc, actor || 'Staff');
+      VALUES (?, 'Status Changed', ?, ?, ?)
+    `).run(req.params.id, desc, actor || 'Staff', new Date().toISOString());
 
     res.json({ message: 'Status updated successfully', status });
   } catch (error) {
@@ -377,7 +378,7 @@ router.post('/:id/parts', async (req, res) => {
     const ticket = await db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
-    const { inventory_id, part_name, quantity, unit_price } = req.body;
+    const { inventory_id, part_name, quantity, unit_price, serial_no } = req.body;
 
     if (!part_name || typeof part_name !== 'string' || !part_name.trim()) {
       return res.status(400).json({ error: 'Part name is required' });
@@ -410,15 +411,21 @@ router.post('/:id/parts', async (req, res) => {
       await db.prepare('UPDATE inventory SET stock_quantity = stock_quantity - ? WHERE id = ?').run(qty, invId);
     }
 
+    const sNo = serial_no ? String(serial_no).trim() : null;
+
     const insertPart = await db.prepare(`
-      INSERT INTO ticket_parts (ticket_id, inventory_id, part_name, quantity, unit_price, total_price, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(ticketId, invId || null, part_name.trim(), qty, price, totalPrice);
+      INSERT INTO ticket_parts (ticket_id, inventory_id, part_name, serial_no, quantity, unit_price, total_price, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(ticketId, invId || null, part_name.trim(), sNo, qty, price, totalPrice);
+
+    const logDesc = sNo 
+      ? `Installed ${qty}x ${part_name.trim()} (SN: ${sNo}) (₹${totalPrice.toLocaleString()})`
+      : `Installed ${qty}x ${part_name.trim()} (₹${totalPrice.toLocaleString()})`;
 
     await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Part Added', ?, 'Technician', CURRENT_TIMESTAMP)
-    `).run(ticketId, `Installed ${qty}x ${part_name.trim()} (₹${totalPrice.toLocaleString()})`);
+      VALUES (?, 'Part Added', ?, 'Technician', ?)
+    `).run(ticketId, logDesc, new Date().toISOString());
 
     res.status(201).json({ id: insertPart.lastInsertRowid, message: 'Part added to repair ticket' });
   } catch (error) {
@@ -440,8 +447,8 @@ router.delete('/:id/parts/:partId', async (req, res) => {
 
     await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, 'Part Removed', ?, 'Technician', CURRENT_TIMESTAMP)
-    `).run(req.params.id, `Removed part: ${part.part_name}`);
+      VALUES (?, 'Part Removed', ?, 'Technician', ?)
+    `).run(req.params.id, `Removed part: ${part.part_name}`, new Date().toISOString());
 
     res.json({ message: 'Part removed and inventory restored' });
   } catch (error) {
@@ -455,8 +462,8 @@ router.post('/:id/timeline', async (req, res) => {
     const { action, description, actor } = req.body;
     await db.prepare(`
       INSERT INTO timeline_logs (ticket_id, action, description, actor, created_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(req.params.id, action || 'Note', description, actor || 'Technician');
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.params.id, action || 'Note', description, actor || 'Technician', new Date().toISOString());
 
     res.status(201).json({ message: 'Timeline note added' });
   } catch (error) {

@@ -18,23 +18,16 @@ export function parseLocalDate(val) {
     return isNaN(d.getTime()) ? null : d;
   }
 
-  const str = String(val).trim();
+  let str = String(val).trim();
   if (!str) return null;
 
-  // Check for local format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM[:SS]" without timezone flag
-  const localMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (localMatch && !str.includes('Z') && !/[+-]\d{2}:?\d{2}$/.test(str)) {
-    const y = parseInt(localMatch[1], 10);
-    const m = parseInt(localMatch[2], 10) - 1;
-    const d = parseInt(localMatch[3], 10);
-    const h = localMatch[4] !== undefined ? parseInt(localMatch[4], 10) : 0;
-    const min = localMatch[5] !== undefined ? parseInt(localMatch[5], 10) : 0;
-    const s = localMatch[6] !== undefined ? parseInt(localMatch[6], 10) : 0;
-    const dateObj = new Date(y, m, d, h, min, s);
-    return isNaN(dateObj.getTime()) ? null : dateObj;
+  // If timestamp has both date and time but lacks 'Z' or timezone offset (e.g. SQLite CURRENT_TIMESTAMP "YYYY-MM-DD HH:MM:SS"),
+  // treat as UTC so it properly converts to the local computer operating system timezone.
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(str)) {
+    str = str.replace(' ', 'T') + 'Z';
   }
 
-  // Fallback to standard Date parsing (e.g. ISO strings with Z or offsets)
+  // Standard Date parsing
   const d = new Date(str);
   return isNaN(d.getTime()) ? null : d;
 }

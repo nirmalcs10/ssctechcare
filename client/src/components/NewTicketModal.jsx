@@ -48,7 +48,28 @@ const ALL_IN_ONE_BRANDS = [
   'Other'
 ];
 
+const PRINTER_BRANDS = [
+  'Canon',
+  'Epson',
+  'HP',
+  'Samsung',
+  'Other'
+];
+
+const MONITOR_BRANDS = [
+  'Acer',
+  'Benq',
+  'Dell',
+  'Lenovo',
+  'LG',
+  'HP',
+  'Samsung',
+  'Other'
+];
+
 const getBrandsForDeviceType = (deviceType) => {
+  if (deviceType === 'Printer') return PRINTER_BRANDS;
+  if (deviceType === 'Monitor') return MONITOR_BRANDS;
   if (deviceType === 'Desktop') return DESKTOP_BRANDS;
   if (deviceType === 'All-in-One') return ALL_IN_ONE_BRANDS;
   return GENERAL_BRANDS;

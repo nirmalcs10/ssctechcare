@@ -22,7 +22,9 @@ import {
   Layers,
   Check,
   Calendar,
-  Laptop
+  Laptop,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { api } from '../api';
 import { applyAppearance, getSavedAppearance } from '../utils/theme';
@@ -51,6 +53,14 @@ export default function Settings({ currentUser }) {
     fullName: '',
     role: 'technician'
   });
+  const [visiblePasswords, setVisiblePasswords] = useState({});
+
+  const togglePasswordVisibility = (userId) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
 
   // Tab 2: Service Center Identity State
   const [settings, setSettings] = useState({
@@ -478,6 +488,7 @@ export default function Settings({ currentUser }) {
                     <tr>
                       <th className="p-3">Staff Member</th>
                       <th className="p-3">Username</th>
+                      <th className="p-3">Password</th>
                       <th className="p-3">Role</th>
                       <th className="p-3">Status</th>
                       <th className="p-3">Last Login</th>
@@ -489,6 +500,25 @@ export default function Settings({ currentUser }) {
                       <tr key={user.id} className="hover:bg-slate-850/40">
                         <td className="p-3 font-semibold text-white">{user.full_name}</td>
                         <td className="p-3 font-mono text-slate-300">@{user.username}</td>
+                        <td className="p-3">
+                          <div className="inline-flex items-center gap-2 bg-slate-950/70 px-2.5 py-1 rounded-lg border border-slate-800">
+                            <span className={`font-mono text-xs ${visiblePasswords[user.id] ? 'text-amber-300 font-bold' : 'text-slate-400 tracking-wider'}`}>
+                              {visiblePasswords[user.id] ? (user.plain_password || '******') : '••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => togglePasswordVisibility(user.id)}
+                              className="text-slate-500 hover:text-sky-400 transition-colors ml-0.5"
+                              title={visiblePasswords[user.id] ? 'Hide password' : 'Show password'}
+                            >
+                              {visiblePasswords[user.id] ? (
+                                <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${
                             user.role === 'admin' ? 'bg-sky-500/10 text-sky-400 border-sky-500/30' :

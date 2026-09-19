@@ -29,6 +29,7 @@ import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import EditCustomerModal from '../components/EditCustomerModal';
+import { formatDateTime } from '../utils/date';
 
 const WORKFLOW_STEPS = [
   'RECEIVED',
@@ -47,7 +48,8 @@ export default function TicketDetail({
   onBack, 
   onPrintJobCard, 
   onGenerateInvoice, 
-  onViewInvoice 
+  onViewInvoice,
+  currentUser
 }) {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +64,7 @@ export default function TicketDetail({
   // Add Part modal state
   const [isAddPartOpen, setIsAddPartOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState('');
+  const [partSerialNo, setPartSerialNo] = useState('');
   const [partQty, setPartQty] = useState(1);
   const [partPrice, setPartPrice] = useState('');
   const [customPartName, setCustomPartName] = useState('');
@@ -147,7 +150,7 @@ export default function TicketDetail({
       let unitPrice = parseFloat(partPrice);
       let invId = null;
 
-      if (selectedPartId) {
+      if (selectedPartId && selectedPartId !== 'OTHER') {
         const found = inventoryList.find(i => String(i.id) === String(selectedPartId));
         if (found) {
           invId = found.id;
@@ -164,6 +167,7 @@ export default function TicketDetail({
       await api.addTicketPart(ticket.id, {
         inventory_id: invId,
         part_name: partName,
+        serial_no: partSerialNo ? partSerialNo.trim() : null,
         quantity: parseInt(partQty, 10),
         unit_price: unitPrice
       });
@@ -171,6 +175,7 @@ export default function TicketDetail({
       setIsAddPartOpen(false);
       setSelectedPartId('');
       setCustomPartName('');
+      setPartSerialNo('');
       setPartQty(1);
       setPartPrice('');
       loadTicketData();
@@ -246,23 +251,25 @@ export default function TicketDetail({
             <span>Print Job Sheet</span>
           </button>
 
-          {/* Invoice Action */}
-          {ticket.invoice ? (
-            <button
-              onClick={() => onViewInvoice(ticket.invoice.id)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 transition-all"
-            >
-              <Receipt className="w-4 h-4" />
-              <span>View Invoice ({ticket.invoice.invoice_number})</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => onGenerateInvoice(ticket.id)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-lg shadow-sky-500/20 transition-all"
-            >
-              <Receipt className="w-4 h-4" />
-              <span>Generate Invoice</span>
-            </button>
+          {/* Invoice Action (Non-technicians only) */}
+          {currentUser?.role !== 'technician' && (
+            ticket.invoice ? (
+              <button
+                onClick={() => onViewInvoice(ticket.invoice.id)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 transition-all"
+              >
+                <Receipt className="w-4 h-4" />
+                <span>View Invoice ({ticket.invoice.invoice_number})</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onGenerateInvoice(ticket.id)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-lg shadow-sky-500/20 transition-all"
+              >
+                <Receipt className="w-4 h-4" />
+                <span>Generate Invoice</span>
+              </button>
+            )
           )}
         </div>
       </div>
@@ -507,6 +514,7 @@ export default function TicketDetail({
                       <p className="font-semibold text-white">{p.part_name}</p>
                       <p className="text-[11px] text-slate-400">
                         Qty: {p.quantity} × ₹{parseFloat(p.unit_price).toLocaleString()}
+                        {p.serial_no && <span className="ml-2 font-mono text-emerald-400 font-medium">SN: {p.serial_no}</span>}
                         {p.sku && <span className="ml-2 font-mono text-sky-400/80">({p.sku})</span>}
                       </p>
                     </div>
@@ -606,8 +614,8 @@ export default function TicketDetail({
                   <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-sky-500 ring-2 ring-slate-900"></div>
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="font-semibold text-slate-200">{event.action}</span>
-                    <span className="text-slate-500">
-                      {new Date(event.created_at).toLocaleDateString('en-GB')} {new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <span className="text-slate-400 font-mono text-[10px]">
+                      {formatDateTime(event.created_at)}
                     </span>
                   </div>
                   <p className="text-slate-300">{event.description}</p>
@@ -630,33 +638,61 @@ export default function TicketDetail({
                 <select
                   value={selectedPartId}
                   onChange={e => {
-                    setSelectedPartId(e.target.value);
-                    const item = inventoryList.find(i => String(i.id) === e.target.value);
-                    if (item) setPartPrice(item.selling_price);
+                    const val = e.target.value;
+                    setSelectedPartId(val);
+                    if (val === 'OTHER') {
+                      setPartPrice('');
+                      setCustomPartName('');
+                    } else if (val) {
+                      const item = inventoryList.find(i => String(i.id) === val);
+                      if (item) {
+                        setPartPrice(item.selling_price);
+                        if (item.serial_no) setPartSerialNo(item.serial_no);
+                      }
+                    } else {
+                      setPartPrice('');
+                    }
                   }}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
                 >
-                  <option value="">-- Choose Stock Item or Enter Custom Below --</option>
+                  <option value="">-- Choose Stock Item or Select Other Below --</option>
                   {inventoryList.map(item => (
                     <option key={item.id} value={item.id}>
                       {item.name} ({item.stock_quantity} in stock) - ₹{item.selling_price}
                     </option>
                   ))}
+                  <option value="OTHER">Other (Custom Part / Non-Inventory Material)</option>
                 </select>
               </div>
 
-              {!selectedPartId && (
+              {(selectedPartId === 'OTHER' || !selectedPartId) && (
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Custom Part / Material Name</label>
+                  <label className="block text-slate-300 font-medium mb-1">
+                    Custom Part / Material Name {selectedPartId === 'OTHER' ? '*' : ''}
+                  </label>
                   <input
                     type="text"
-                    placeholder="e.g. Special IC / Thermal Gel"
+                    required={selectedPartId === 'OTHER' || !selectedPartId}
+                    placeholder="e.g. Special IC / Thermal Gel / Custom Cable"
                     value={customPartName}
                     onChange={e => setCustomPartName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                   />
                 </div>
               )}
+
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">
+                  Serial No <span className="text-slate-500 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. SN-89234871 (optional)"
+                  value={partSerialNo}
+                  onChange={e => setPartSerialNo(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

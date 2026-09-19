@@ -30,7 +30,6 @@ export default function Inventory() {
 
   // New item form
   const [newItem, setNewItem] = useState({
-    sku: '',
     name: '',
     category: 'RAM',
     brand_compat: '',
@@ -78,10 +77,13 @@ export default function Inventory() {
   const handleAddItem = async (e) => {
     e.preventDefault();
     try {
-      await api.createInventoryItem(newItem);
+      await api.createInventoryItem({
+        ...newItem,
+        sku: `${newItem.category.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-6)}`,
+        name: newItem.name?.trim() || (newItem.brand_compat ? `${newItem.brand_compat} ${newItem.category}` : `${newItem.category} Component`)
+      });
       setIsAddOpen(false);
       setNewItem({
-        sku: '',
         name: '',
         category: 'RAM',
         brand_compat: '',
@@ -217,7 +219,7 @@ export default function Inventory() {
             <table className="w-full text-left text-xs sm:text-sm min-w-[700px]">
               <thead className="bg-slate-800/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700">
                 <tr>
-                  <th className="py-3 px-4">SKU / Code</th>
+                  <th className="py-3 px-4">Serial No / SKU</th>
                   <th className="py-3 px-4">Part Name & Compatibility</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4 text-right">Cost (₹)</th>
@@ -233,7 +235,7 @@ export default function Inventory() {
                   return (
                     <tr key={item.id} className="hover:bg-slate-800/60 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-bold text-sky-400 text-xs">
-                        {item.sku}
+                        {item.serial_no || item.sku}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-white">{item.name}</div>
@@ -255,13 +257,13 @@ export default function Inventory() {
                         ₹{parseFloat(item.selling_price).toLocaleString()}
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold tabular-nums ${
                           isLowStock
                             ? 'bg-amber-950 text-amber-400 border border-amber-800 animate-pulse'
                             : 'bg-slate-800 text-slate-200 border border-slate-700'
                         }`}>
-                          {item.stock_quantity}
-                          {isLowStock && <AlertTriangle className="w-3 h-3 text-amber-400" />}
+                          {item.stock_quantity}{isLowStock ? ' left' : ''}
+                          {isLowStock && <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-400">
@@ -309,52 +311,50 @@ export default function Inventory() {
             </div>
 
             <form onSubmit={handleAddItem} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Part SKU / Code *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. SSD-1TB-NVME"
-                    value={newItem.sku}
-                    onChange={e => setNewItem({ ...newItem, sku: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Category *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Storage, RAM, Display..."
-                    value={newItem.category}
-                    onChange={e => setNewItem({ ...newItem, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                  />
-                </div>
-              </div>
-
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Full Part Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Kingston 1TB NVMe M.2 SSD"
+                  placeholder="e.g. 16GB DDR4 3200MHz Laptop RAM / Samsung 980 NVMe SSD"
                   value={newItem.name}
                   onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none placeholder-slate-500"
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Compatible Brands / Models</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dell XPS, Lenovo ThinkPad, HP..."
-                  value={newItem.brand_compat}
-                  onChange={e => setNewItem({ ...newItem, brand_compat: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Category *</label>
+                  <select
+                    required
+                    value={newItem.category}
+                    onChange={e => setNewItem({ ...newItem, category: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="RAM">RAM</option>
+                    <option value="Storage">Storage (SSD / HDD)</option>
+                    <option value="Display">Display / Screen</option>
+                    <option value="Motherboard">Motherboard / Logic Board</option>
+                    <option value="Battery">Battery</option>
+                    <option value="Power Adapter">Power Adapter / Charger</option>
+                    <option value="Keyboard">Keyboard / Touchpad</option>
+                    <option value="Cooling">Cooling Fan / Heatsink</option>
+                    <option value="Body & Hinges">Body & Hinges</option>
+                    <option value="Networking">Networking / Wi-Fi Card</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Compatible Brands / Models</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dell XPS, Lenovo, HP..."
+                    value={newItem.brand_compat}
+                    onChange={e => setNewItem({ ...newItem, brand_compat: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none placeholder-slate-500"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

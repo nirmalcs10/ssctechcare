@@ -18,7 +18,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import MainLogin from './pages/MainLogin';
 
-import { Wrench, LayoutDashboard, Ticket, Kanban, Receipt, Menu } from 'lucide-react';
+import { Wrench, LayoutDashboard, Ticket, Kanban, Receipt, Menu, Boxes } from 'lucide-react';
 import { api } from './api';
 import { applyAppearance } from './utils/theme';
 
@@ -119,7 +119,7 @@ export default function App() {
 
   // Redirect technician and frontdesk roles away from restricted tabs
   useEffect(() => {
-    if (currentUser?.role === 'technician' && (currentTab === 'customers' || currentTab === 'technicians')) {
+    if (currentUser?.role === 'technician' && (currentTab === 'customers' || currentTab === 'technicians' || currentTab === 'invoices')) {
       setCurrentTab('dashboard');
     }
     if (currentUser?.role === 'frontdesk' && currentTab === 'technicians') {
@@ -298,6 +298,7 @@ export default function App() {
               onPrintJobCard={handlePrintJobCard}
               onGenerateInvoice={handleGenerateInvoiceFromTicket}
               onViewInvoice={handlePrintInvoice}
+              currentUser={currentUser}
             />
           )}
 
@@ -318,7 +319,7 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'invoices' && (
+          {currentTab === 'invoices' && currentUser?.role !== 'technician' && (
             <Invoices
               preselectedTicketId={invoicePreselectId}
               onPrintInvoice={handlePrintInvoice}
@@ -394,19 +395,35 @@ export default function App() {
           <span className="text-[10px] mt-0.5">Workflow</span>
         </button>
 
-        <button
-          onClick={() => {
-            setSelectedTicketId(null);
-            setCurrentTab('invoices');
-            setIsMobileSidebarOpen(false);
-          }}
-          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-            currentTab === 'invoices' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Receipt className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5">Invoices</span>
-        </button>
+        {currentUser?.role === 'technician' ? (
+          <button
+            onClick={() => {
+              setSelectedTicketId(null);
+              setCurrentTab('inventory');
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              currentTab === 'inventory' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Boxes className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">Parts</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              setSelectedTicketId(null);
+              setCurrentTab('invoices');
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
+              currentTab === 'invoices' ? 'text-sky-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">Invoices</span>
+          </button>
+        )}
 
         <button
           onClick={() => setIsMobileSidebarOpen(prev => !prev)}

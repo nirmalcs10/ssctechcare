@@ -18,6 +18,7 @@ import {
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
+import { formatTime } from '../utils/date';
 
 export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate, currentUser }) {
   const [data, setData] = useState(null);
@@ -255,14 +256,25 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
             ) : (
               <div className="space-y-2.5">
                 {data.lowStockItems.map(item => (
-                  <div key={item.id} className="p-2.5 bg-slate-800/70 border border-amber-500/20 rounded-xl flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium text-slate-200 line-clamp-1">{item.name}</p>
-                      <p className="text-[11px] text-slate-400 font-mono">{item.sku}</p>
+                  <div 
+                    key={item.id} 
+                    onClick={() => onNavigate('inventory')}
+                    className="p-2.5 bg-slate-800/70 hover:bg-slate-800 border border-amber-500/20 hover:border-amber-500/40 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-slate-200 group-hover:text-white truncate" title={item.name}>
+                        {item.name}
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-mono truncate">
+                        {item.sku}
+                        {item.category && <span className="ml-1.5 text-slate-500 font-sans">• {item.category}</span>}
+                      </p>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-950 text-amber-400 border border-amber-800">
-                      {item.stock_quantity} left
-                    </span>
+                    <div className="shrink-0 text-right">
+                      <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/90 text-amber-400 border border-amber-800/80 whitespace-nowrap min-w-[68px] text-center tabular-nums shadow-sm">
+                        {item.stock_quantity} left
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -313,8 +325,8 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
             <div key={act.id} className="p-3 bg-slate-800/60 border border-slate-800 rounded-xl space-y-1.5">
               <div className="flex items-center justify-between text-[11px]">
                 <span className="font-mono font-bold text-sky-400">{act.ticket_number}</span>
-                <span className="text-slate-500">
-                  {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <span className="text-slate-400 font-mono text-[10px]">
+                  {formatTime(act.created_at)}
                 </span>
               </div>
               <p className="text-xs font-semibold text-slate-200">{act.action}</p>

@@ -44,12 +44,13 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Helper to normalize parameters: handles single array or spread arguments
+// Helper to normalize parameters: handles single array or spread arguments and converts undefined to null
 function normalizeParams(params) {
+  let list = params;
   if (params.length === 1 && Array.isArray(params[0])) {
-    return params[0];
+    list = params[0];
   }
-  return params;
+  return list.map(v => (v === undefined ? null : v));
 }
 
 // Convert SQLite ?, @named or PostgreSQL $1, $2 to target dialect
@@ -288,6 +289,7 @@ const POSTGRES_SCHEMA = `
     name TEXT NOT NULL,
     category TEXT NOT NULL,
     brand_compat TEXT,
+    serial_no TEXT,
     cost_price REAL DEFAULT 0,
     selling_price REAL DEFAULT 0,
     stock_quantity INTEGER DEFAULT 0,
@@ -328,6 +330,7 @@ const POSTGRES_SCHEMA = `
     ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
     inventory_id INTEGER REFERENCES inventory(id) ON DELETE SET NULL,
     part_name TEXT NOT NULL,
+    serial_no TEXT,
     quantity INTEGER DEFAULT 1,
     unit_price REAL NOT NULL,
     total_price REAL NOT NULL,
@@ -369,6 +372,7 @@ const POSTGRES_SCHEMA = `
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
+    plain_password TEXT,
     full_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'admin',
     is_active INTEGER DEFAULT 1,
@@ -447,6 +451,7 @@ const SQLITE_SCHEMA = `
     name TEXT NOT NULL,
     category TEXT NOT NULL,
     brand_compat TEXT,
+    serial_no TEXT,
     cost_price REAL DEFAULT 0,
     selling_price REAL DEFAULT 0,
     stock_quantity INTEGER DEFAULT 0,
@@ -487,6 +492,7 @@ const SQLITE_SCHEMA = `
     ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
     inventory_id INTEGER REFERENCES inventory(id) ON DELETE SET NULL,
     part_name TEXT NOT NULL,
+    serial_no TEXT,
     quantity INTEGER DEFAULT 1,
     unit_price REAL NOT NULL,
     total_price REAL NOT NULL,
@@ -528,6 +534,7 @@ const SQLITE_SCHEMA = `
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
+    plain_password TEXT,
     full_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'admin',
     is_active INTEGER DEFAULT 1,
@@ -568,6 +575,19 @@ const SQLITE_SCHEMA = `
 
 // Seed default rows if tables are empty
 async function seedDefaults() {
+  // Safe column migrations for existing databases
+  try {
+    if (activeEngine === 'postgres') {
+      await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT');
+      await run('ALTER TABLE inventory ADD COLUMN IF NOT EXISTS serial_no TEXT');
+      await run('ALTER TABLE ticket_parts ADD COLUMN IF NOT EXISTS serial_no TEXT');
+    } else {
+      try { await run('ALTER TABLE users ADD COLUMN plain_password TEXT'); } catch (e) {}
+      try { await run('ALTER TABLE inventory ADD COLUMN serial_no TEXT'); } catch (e) {}
+      try { await run('ALTER TABLE ticket_parts ADD COLUMN serial_no TEXT'); } catch (e) {}
+    }
+  } catch (migErr) {}
+
   const settingsRow = await get('SELECT COUNT(*) as c FROM settings');
   if (parseInt(settingsRow.c, 10) === 0) {
     await run('INSERT INTO settings (id) VALUES (1)');
@@ -584,11 +604,18 @@ async function seedDefaults() {
     for (const u of defaultUsers) {
       const { hash, salt } = hashPassword(u.password);
       await run(
-        'INSERT INTO users (username, password_hash, salt, full_name, role) VALUES (?, ?, ?, ?, ?)',
-        [u.username, hash, salt, u.full_name, u.role]
+        'INSERT INTO users (username, password_hash, salt, plain_password, full_name, role) VALUES (?, ?, ?, ?, ?, ?)',
+        [u.username, hash, salt, u.password, u.full_name, u.role]
       );
     }
     console.log('✔ Initialized default staff accounts: admin, tech, staff');
+  } else {
+    // Backfill plain_password for default accounts if missing
+    try {
+      await run("UPDATE users SET plain_password = 'admin123' WHERE username = 'admin' AND (plain_password IS NULL OR plain_password = '')");
+      await run("UPDATE users SET plain_password = 'tech123' WHERE username = 'tech' AND (plain_password IS NULL OR plain_password = '')");
+      await run("UPDATE users SET plain_password = 'staff123' WHERE username = 'staff' AND (plain_password IS NULL OR plain_password = '')");
+    } catch (e) {}
   }
 
   const defaultMasterAccounts = [
