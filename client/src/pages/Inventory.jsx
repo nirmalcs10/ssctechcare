@@ -24,6 +24,8 @@ export default function Inventory() {
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState(null);
   const [isStockOpen, setIsStockOpen] = useState(false);
   const [stockItem, setStockItem] = useState(null);
   const [stockChange, setStockChange] = useState('');
@@ -39,6 +41,52 @@ export default function Inventory() {
     min_threshold: '3',
     location: ''
   });
+
+  const handleOpenEdit = (item) => {
+    setEditItem({
+      id: item.id,
+      sku: item.sku || '',
+      name: item.name || '',
+      category: item.category || 'RAM',
+      brand_compat: item.brand_compat || '',
+      serial_no: item.serial_no || '',
+      cost_price: item.cost_price != null ? String(item.cost_price) : '',
+      selling_price: item.selling_price != null ? String(item.selling_price) : '',
+      stock_quantity: item.stock_quantity != null ? String(item.stock_quantity) : '',
+      min_threshold: item.min_threshold != null ? String(item.min_threshold) : '3',
+      location: item.location || ''
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleUpdateItem = async (e) => {
+    e.preventDefault();
+    if (!editItem || !editItem.id) return;
+
+    try {
+      setLoading(true);
+      await api.updateInventoryItem(editItem.id, {
+        sku: editItem.sku?.trim() || '',
+        name: editItem.name.trim(),
+        category: editItem.category,
+        brand_compat: editItem.brand_compat?.trim() || '',
+        serial_no: editItem.serial_no?.trim() || '',
+        cost_price: parseFloat(editItem.cost_price) || 0,
+        selling_price: parseFloat(editItem.selling_price) || 0,
+        stock_quantity: parseInt(editItem.stock_quantity, 10) || 0,
+        min_threshold: parseInt(editItem.min_threshold, 10) || 3,
+        location: editItem.location?.trim() || ''
+      });
+      setIsEditOpen(false);
+      setEditItem(null);
+      loadInventory();
+      loadCategories();
+    } catch (err) {
+      alert('Failed to update spare part: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadCategories();
@@ -346,8 +394,20 @@ export default function Inventory() {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Edit Part & Price Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(item)}
+                            className="p-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-sky-400 text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1"
+                            title="Edit Spare Part & Pricing"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Edit</span>
+                          </button>
+
                           {/* Quick Adjust Button */}
                           <button
+                            type="button"
                             onClick={() => {
                               setStockItem(item);
                               setIsStockOpen(true);
@@ -357,6 +417,7 @@ export default function Inventory() {
                             +/- Stock
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDeleteItem(item.id, item.name)}
                             className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
                             title="Delete item"
@@ -504,6 +565,167 @@ export default function Inventory() {
                   className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold"
                 >
                   Save Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Part & Price Modal */}
+      {isEditOpen && editItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white">Edit Spare Part & Pricing</h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">SKU: {editItem.sku || 'N/A'}</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => { setIsEditOpen(false); setEditItem(null); }} 
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateItem} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Part Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Crucial 8GB DDR4 3200MHz SODIMM Laptop RAM"
+                  value={editItem.name}
+                  onChange={e => setEditItem({ ...editItem, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none placeholder-slate-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Category *</label>
+                  <select
+                    required
+                    value={editItem.category}
+                    onChange={e => setEditItem({ ...editItem, category: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="RAM">RAM</option>
+                    <option value="Storage">Storage (SSD / HDD)</option>
+                    <option value="Display">Display / Screen</option>
+                    <option value="Motherboard">Motherboard / Logic Board</option>
+                    <option value="Battery">Battery</option>
+                    <option value="Power Adapter">Power Adapter / Charger</option>
+                    <option value="Keyboard">Keyboard / Touchpad</option>
+                    <option value="Cooling">Cooling Fan / Heatsink</option>
+                    <option value="Body & Hinges">Body & Hinges</option>
+                    <option value="Networking">Networking / Wi-Fi Card</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Compatible Brands / Models</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dell XPS, Lenovo, HP, Universal..."
+                    value={editItem.brand_compat}
+                    onChange={e => setEditItem({ ...editItem, brand_compat: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none placeholder-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Cost Price (₹) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                    placeholder="e.g. 1200"
+                    value={editItem.cost_price}
+                    onChange={e => setEditItem({ ...editItem, cost_price: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Purchase / procurement price</p>
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Selling Price (₹) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                    placeholder="e.g. 1850"
+                    value={editItem.selling_price}
+                    onChange={e => setEditItem({ ...editItem, selling_price: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono font-bold text-sky-400"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Retail price billed to customer</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Stock Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editItem.stock_quantity}
+                    onChange={e => setEditItem({ ...editItem, stock_quantity: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Min Alert Level</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editItem.min_threshold}
+                    onChange={e => setEditItem({ ...editItem, min_threshold: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Shelf / Bin</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Bin A-1"
+                    value={editItem.location}
+                    onChange={e => setEditItem({ ...editItem, location: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Serial Number / Part SKU</label>
+                <input
+                  type="text"
+                  placeholder="Optional serial or barcode"
+                  value={editItem.serial_no}
+                  onChange={e => setEditItem({ ...editItem, serial_no: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsEditOpen(false); setEditItem(null); }}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-lg font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

@@ -171,6 +171,16 @@ router.put('/:id', async (req, res) => {
   try {
     const { sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location } = req.body;
 
+    const existing = await db.prepare('SELECT * FROM inventory WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Item not found' });
+
+    if (name) {
+      const duplicate = await db.prepare('SELECT id, name FROM inventory WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND id != ? LIMIT 1').get(name.trim(), req.params.id);
+      if (duplicate) {
+        return res.status(400).json({ error: `Another part named "${duplicate.name}" already exists in inventory.` });
+      }
+    }
+
     await db.prepare(`
       UPDATE inventory SET
         sku = COALESCE(?, sku),
@@ -184,9 +194,22 @@ router.put('/:id', async (req, res) => {
         min_threshold = COALESCE(?, min_threshold),
         location = COALESCE(?, location)
       WHERE id = ?
-    `).run(sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location, req.params.id);
+    `).run(
+      sku !== undefined ? sku : existing.sku,
+      name !== undefined ? name.trim() : existing.name,
+      category !== undefined ? category : existing.category,
+      brand_compat !== undefined ? brand_compat : existing.brand_compat,
+      serial_no !== undefined ? serial_no : existing.serial_no,
+      cost_price !== undefined ? parseFloat(cost_price) : existing.cost_price,
+      selling_price !== undefined ? parseFloat(selling_price) : existing.selling_price,
+      stock_quantity !== undefined ? parseInt(stock_quantity, 10) : existing.stock_quantity,
+      min_threshold !== undefined ? parseInt(min_threshold, 10) : existing.min_threshold,
+      location !== undefined ? location : existing.location,
+      req.params.id
+    );
 
-    res.json({ message: 'Item updated successfully' });
+    const updated = await db.prepare('SELECT * FROM inventory WHERE id = ?').get(req.params.id);
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1127,7 +1127,28 @@ export async function handleApiRequest(request, env) {
 
   if (inventoryItemMatch && method === 'PUT') {
     const id = inventoryItemMatch[1];
-    const { sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location } = body;
+    const existing = await d1.get(db, 'SELECT * FROM inventory WHERE id = ?', id);
+    if (!existing) return err('Item not found', 404);
+
+    const sku = body.sku !== undefined ? (body.sku || null) : existing.sku;
+    const name = body.name !== undefined ? (body.name.trim() || existing.name) : existing.name;
+    const category = body.category !== undefined ? body.category : existing.category;
+    const brand_compat = body.brand_compat !== undefined ? body.brand_compat : existing.brand_compat;
+    const serial_no = body.serial_no !== undefined ? (body.serial_no || null) : existing.serial_no;
+    const cost_price = body.cost_price !== undefined ? (Number(body.cost_price) || 0) : existing.cost_price;
+    const selling_price = body.selling_price !== undefined ? (Number(body.selling_price) || 0) : existing.selling_price;
+    const stock_quantity = body.stock_quantity !== undefined ? (Number(body.stock_quantity) || 0) : existing.stock_quantity;
+    const min_threshold = body.min_threshold !== undefined ? (Number(body.min_threshold) || 3) : existing.min_threshold;
+    const location = body.location !== undefined ? (body.location || '') : existing.location;
+
+    const duplicate = await d1.get(
+      db,
+      `SELECT id, name FROM inventory WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND id != ? LIMIT 1`,
+      name, id
+    );
+    if (duplicate) {
+      return err(`Another part named "${duplicate.name}" already exists in inventory.`, 400);
+    }
 
     await d1.run(
       db,
@@ -1135,8 +1156,8 @@ export async function handleApiRequest(request, env) {
               cost_price = ?, selling_price = ?, stock_quantity = ?, min_threshold = ?, location = ?
        WHERE id = ?`,
       sku, name, category, brand_compat, serial_no,
-      Number(cost_price) || 0, Number(selling_price) || 0, Number(stock_quantity) || 0,
-      Number(min_threshold) || 3, location, id
+      cost_price, selling_price, stock_quantity,
+      min_threshold, location, id
     );
     const updated = await d1.get(db, 'SELECT * FROM inventory WHERE id = ?', id);
     return json(updated);
