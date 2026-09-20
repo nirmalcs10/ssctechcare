@@ -51,7 +51,7 @@ const handleRevenueAnalytics = async (req, res) => {
         (SELECT COALESCE(SUM(total_price), 0) FROM ticket_parts WHERE ticket_id = t.id) as parts_sum
       FROM tickets t
       JOIN customers c ON t.customer_id = c.id
-      WHERE t.status != 'CANCELLED'
+      WHERE t.status IN ('READY_FOR_PICKUP', 'DELIVERED', 'RESOLVED')
     `).all();
 
     const invoicedTicketIds = new Set();
@@ -75,7 +75,7 @@ const handleRevenueAnalytics = async (req, res) => {
     });
 
     (allInvoices || []).forEach(inv => {
-      if (inv.ticket_id) invoicedTicketIds.add(inv.ticket_id);
+      if (inv.ticket_id != null) invoicedTicketIds.add(Number(inv.ticket_id));
       const cid = inv.customer_id;
       if (!customerMap[cid]) {
         customerMap[cid] = {
@@ -118,7 +118,7 @@ const handleRevenueAnalytics = async (req, res) => {
     });
 
     (allActiveTickets || []).forEach(t => {
-      if (!invoicedTicketIds.has(t.ticket_id)) {
+      if (!invoicedTicketIds.has(Number(t.ticket_id))) {
         const parts = Number(t.parts_sum) || 0;
         const est = Number(t.estimated_cost) || 0;
         const jobTotal = Math.max(est, parts);

@@ -10,22 +10,23 @@ router.get('/', async (req, res) => {
     let query = `
       SELECT 
         c.id, c.name, c.phone, c.alt_phone, c.email, c.address, c.notes, c.created_at,
-        COUNT(t.id) as total_tickets,
-        COALESCE(SUM(inv.grand_total), 0) as total_spent
+        (SELECT COUNT(*) FROM tickets WHERE customer_id = c.id) as total_tickets,
+        (SELECT COUNT(*) FROM tickets WHERE customer_id = c.id) as ticket_count,
+        (SELECT COALESCE(SUM(grand_total), 0) FROM invoices WHERE customer_id = c.id) as total_spent,
+        (SELECT COALESCE(SUM(balance_due), 0) FROM invoices WHERE customer_id = c.id) as total_invoice_due,
+        (SELECT COALESCE(SUM(balance_due), 0) FROM invoices WHERE customer_id = c.id) as total_due
       FROM customers c
-      LEFT JOIN tickets t ON c.id = t.customer_id
-      LEFT JOIN invoices inv ON c.id = inv.customer_id
       WHERE 1=1
     `;
     const params = [];
 
     if (search) {
-      query += ` AND (c.name ILIKE ? OR c.phone ILIKE ? OR c.email ILIKE ? OR c.address ILIKE ?)`;
+      query += ` AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.address LIKE ?)`;
       const s = `%${search}%`;
       params.push(s, s, s, s);
     }
 
-    query += ` GROUP BY c.id, c.name, c.phone, c.alt_phone, c.email, c.address, c.notes, c.created_at ORDER BY c.created_at DESC`;
+    query += ` ORDER BY c.created_at DESC`;
 
     const customers = await db.prepare(query).all(...params);
     res.json(customers);
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET single customer with complete ticket history
+// GET single customer with complete ticket and invoice history
 router.get('/:id', async (req, res) => {
   try {
     const customer = await db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
@@ -44,9 +45,12 @@ router.get('/:id', async (req, res) => {
       SELECT 
         t.*,
         tech.name as technician_name,
+        inv.id as invoice_id,
         inv.invoice_number,
         inv.payment_status,
-        inv.grand_total
+        inv.grand_total,
+        inv.amount_paid,
+        inv.balance_due
       FROM tickets t
       LEFT JOIN technicians tech ON t.technician_id = tech.id
       LEFT JOIN invoices inv ON t.id = inv.ticket_id
@@ -54,7 +58,13 @@ router.get('/:id', async (req, res) => {
       ORDER BY t.created_at DESC
     `).all(req.params.id);
 
-    res.json({ ...customer, tickets });
+    const invoices = await db.prepare(`
+      SELECT * FROM invoices WHERE customer_id = ? ORDER BY created_at DESC
+    `).all(req.params.id);
+
+    const totalDue = invoices.reduce((sum, i) => sum + (Number(i.balance_due) || 0), 0);
+
+    res.json({ ...customer, tickets, invoices, total_due: totalDue });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

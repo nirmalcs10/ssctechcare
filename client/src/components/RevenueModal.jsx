@@ -80,7 +80,7 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
     });
 
     (invoices || []).forEach(inv => {
-      if (inv.ticket_id) invoicedTicketIds.add(inv.ticket_id);
+      if (inv.ticket_id) invoicedTicketIds.add(Number(inv.ticket_id));
       const paid = Number(inv.amount_paid) || 0;
       const billed = Number(inv.grand_total) || 0;
       const due = Number(inv.balance_due) || 0;
@@ -136,7 +136,8 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
     });
 
     (tickets || []).forEach(t => {
-      if (t.status !== 'CANCELLED' && !invoicedTicketIds.has(t.id)) {
+      const isReadyOrDelivered = ['READY_FOR_PICKUP', 'DELIVERED', 'RESOLVED'].includes(t.status);
+      if (isReadyOrDelivered && !invoicedTicketIds.has(Number(t.id))) {
         const est = Number(t.estimated_cost) || 0;
         const adv = Number(t.advance_paid) || 0;
         const due = Math.max(0, est - adv);
@@ -633,11 +634,11 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                               </td>
                               <td className="py-3 px-3.5">
                                 {c.items && c.items.length > 0 ? (
-                                  <div className="flex flex-col gap-1">
-                                    {c.items.slice(0, 3).map((it, idx) => (
+                                  <div className="flex flex-col gap-1.5">
+                                    {c.items.slice(0, 4).map((it, idx) => (
                                       <div 
                                         key={idx} 
-                                        className={`inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded border max-w-fit ${
+                                        className={`inline-flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded border max-w-fit ${
                                           it.type === 'invoice'
                                             ? 'bg-amber-500/10 border-amber-500/25 text-amber-300'
                                             : 'bg-sky-500/10 border-sky-500/25 text-sky-300'
@@ -648,10 +649,29 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                                         {it.due > 0 && (
                                           <span className="text-rose-400 font-bold ml-1">₹{Number(it.due).toLocaleString()}</span>
                                         )}
+                                        {it.due > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onClose();
+                                              if (it.type === 'invoice') {
+                                                if (onSettleInvoice) onSettleInvoice(it.id);
+                                                else onNavigate('invoices', { invoiceId: it.id });
+                                              } else {
+                                                onNavigate('invoices', { ticketId: it.ticket_id });
+                                              }
+                                            }}
+                                            className="ml-1 text-[10px] px-1.5 py-0.2 bg-slate-800 hover:bg-slate-700 text-white font-sans font-semibold rounded border border-slate-600 hover:border-slate-500 transition-colors"
+                                            title={it.type === 'invoice' ? `Settle invoice ${it.ref}` : `Bill job ${it.ref}`}
+                                          >
+                                            {it.type === 'invoice' ? 'Settle' : 'Bill'}
+                                          </button>
+                                        )}
                                       </div>
                                     ))}
-                                    {c.items.length > 3 && (
-                                      <span className="text-[10px] text-slate-400">+{c.items.length - 3} more</span>
+                                    {c.items.length > 4 && (
+                                      <span className="text-[10px] text-slate-400">+{c.items.length - 4} more</span>
                                     )}
                                   </div>
                                 ) : (

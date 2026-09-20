@@ -15,7 +15,13 @@ import {
 import { api } from '../api';
 import RevenueModal from '../components/RevenueModal';
 
-export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTicketId }) {
+export default function Invoices({ 
+  onPrintInvoice, 
+  onSelectTicket, 
+  preselectedTicketId, 
+  preselectedInvoiceId,
+  onClearPreselect 
+}) {
   const [invoices, setInvoices] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,9 +51,22 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
     loadTickets();
   }, [selectedStatus, searchQuery]);
 
+  // Handle direct invoice settlement request
   useEffect(() => {
-    if (preselectedTicketId) {
-      // Check if invoice already exists for this ticket
+    if (preselectedInvoiceId && invoices.length > 0) {
+      const target = invoices.find(inv => String(inv.id) === String(preselectedInvoiceId));
+      if (target) {
+        setPayInvoice(target);
+        setPayAmount(String(target.balance_due || ''));
+        setIsPayOpen(true);
+        if (onClearPreselect) onClearPreselect();
+      }
+    }
+  }, [preselectedInvoiceId, invoices]);
+
+  // Handle direct ticket billing request
+  useEffect(() => {
+    if (preselectedTicketId && invoices.length > 0) {
       const existing = invoices.find(inv => String(inv.ticket_id) === String(preselectedTicketId));
       if (existing) {
         if (Number(existing.balance_due) > 0) {
@@ -57,10 +76,11 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
         } else {
           onPrintInvoice(existing.id);
         }
-        return;
+      } else {
+        setSelectedTicketId(preselectedTicketId);
+        setIsCreateOpen(true);
       }
-      setSelectedTicketId(preselectedTicketId);
-      setIsCreateOpen(true);
+      if (onClearPreselect) onClearPreselect();
     }
   }, [preselectedTicketId, invoices]);
 

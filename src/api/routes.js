@@ -395,14 +395,14 @@ export async function handleApiRequest(request, env) {
       totalRevenue = revRow ? Number(revRow.total_revenue) : 0;
       let invoicePending = revRow ? Number(revRow.total_pending) : 0;
 
-      // Include active uninvoiced repair jobs with pending balance
+      // Include completed/delivered uninvoiced repair jobs with pending balance
       const allActiveTickets = await d1.all(
         db,
         `SELECT 
            t.id, t.estimated_cost, t.advance_paid,
            (SELECT COALESCE(SUM(total_price), 0) FROM ticket_parts WHERE ticket_id = t.id) as parts_sum
          FROM tickets t
-         WHERE t.status != 'CANCELLED'
+         WHERE t.status IN ('READY_FOR_PICKUP', 'DELIVERED', 'RESOLVED')
            AND t.id NOT IN (SELECT ticket_id FROM invoices WHERE ticket_id IS NOT NULL)`
       );
       let ticketPending = 0;
@@ -532,7 +532,7 @@ export async function handleApiRequest(request, env) {
          (SELECT COALESCE(SUM(total_price), 0) FROM ticket_parts WHERE ticket_id = t.id) as parts_sum
        FROM tickets t
        JOIN customers c ON t.customer_id = c.id
-       WHERE t.status != 'CANCELLED'`
+       WHERE t.status IN ('READY_FOR_PICKUP', 'DELIVERED', 'RESOLVED')`
     );
 
     const invoicedTicketIds = new Set();
@@ -556,7 +556,7 @@ export async function handleApiRequest(request, env) {
     });
 
     (allInvoices || []).forEach(inv => {
-      if (inv.ticket_id) invoicedTicketIds.add(inv.ticket_id);
+      if (inv.ticket_id != null) invoicedTicketIds.add(Number(inv.ticket_id));
       const cid = inv.customer_id;
       if (!customerMap[cid]) {
         customerMap[cid] = {
@@ -599,7 +599,7 @@ export async function handleApiRequest(request, env) {
     });
 
     (allActiveTickets || []).forEach(t => {
-      if (!invoicedTicketIds.has(t.ticket_id)) {
+      if (!invoicedTicketIds.has(Number(t.ticket_id))) {
         const parts = Number(t.parts_sum) || 0;
         const est = Number(t.estimated_cost) || 0;
         const jobTotal = Math.max(est, parts);
@@ -1114,8 +1114,11 @@ export async function handleApiRequest(request, env) {
     const search = url.searchParams.get('search') || '';
     let sql = `
       SELECT c.*,
+             (SELECT COUNT(*) FROM tickets WHERE customer_id = c.id) as total_tickets,
              (SELECT COUNT(*) FROM tickets WHERE customer_id = c.id) as ticket_count,
-             (SELECT COALESCE(SUM(grand_total), 0) FROM invoices WHERE customer_id = c.id) as total_spent
+             (SELECT COALESCE(SUM(grand_total), 0) FROM invoices WHERE customer_id = c.id) as total_spent,
+             (SELECT COALESCE(SUM(balance_due), 0) FROM invoices WHERE customer_id = c.id) as total_invoice_due,
+             (SELECT COALESCE(SUM(balance_due), 0) FROM invoices WHERE customer_id = c.id) as total_due
       FROM customers c
       WHERE 1=1
     `;
@@ -1135,8 +1138,26 @@ export async function handleApiRequest(request, env) {
     const id = customerDetailMatch[1];
     const customer = await d1.get(db, 'SELECT * FROM customers WHERE id = ?', id);
     if (!customer) return err('Customer not found', 404);
-    const tickets = await d1.all(db, 'SELECT * FROM tickets WHERE customer_id = ? ORDER BY created_at DESC', id);
-    return json({ ...customer, tickets });
+    const tickets = await d1.all(
+      db,
+      `SELECT t.*,
+              tech.name as technician_name,
+              inv.id as invoice_id,
+              inv.invoice_number,
+              inv.payment_status,
+              inv.grand_total,
+              inv.amount_paid,
+              inv.balance_due
+       FROM tickets t
+       LEFT JOIN technicians tech ON t.technician_id = tech.id
+       LEFT JOIN invoices inv ON t.id = inv.ticket_id
+       WHERE t.customer_id = ?
+       ORDER BY t.created_at DESC`,
+      id
+    );
+    const invoices = await d1.all(db, 'SELECT * FROM invoices WHERE customer_id = ? ORDER BY created_at DESC', id);
+    const totalDue = invoices.reduce((sum, i) => sum + (Number(i.balance_due) || 0), 0);
+    return json({ ...customer, tickets, invoices, total_due: totalDue });
   }
 
   if (path === '/api/customers' && method === 'POST') {
@@ -1390,8 +1411,10 @@ export async function handleApiRequest(request, env) {
       return err('Invoice is already fully paid', 400);
     }
 
-    const newPaid = Math.round((inv.amount_paid + payment) * 100) / 100;
-    const newBalance = Math.max(0, Math.round((inv.grand_total - newPaid) * 100) / 100);
+    const curPaid = Number(inv.amount_paid) || 0;
+    const curTotal = Number(inv.grand_total) || 0;
+    const newPaid = Math.round((curPaid + payment) * 100) / 100;
+    const newBalance = Math.max(0, Math.round((curTotal - newPaid) * 100) / 100);
     const newStatus = newBalance <= 0.01 ? 'Paid' : 'Partial';
 
     await d1.run(
@@ -1399,6 +1422,14 @@ export async function handleApiRequest(request, env) {
       'UPDATE invoices SET amount_paid = ?, balance_due = ?, payment_status = ?, payment_method = ? WHERE id = ?',
       newPaid, newBalance, newStatus, payment_method || inv.payment_method, id
     );
+
+    if (inv.ticket_id) {
+      await d1.run(
+        db,
+        'INSERT INTO timeline_logs (ticket_id, action, description, actor) VALUES (?, ?, ?, ?)',
+        inv.ticket_id, 'Payment Received', `Payment of ₹${payment.toLocaleString()} received via ${payment_method || 'Cash'}. Remaining balance: ₹${newBalance.toLocaleString()}`, staffUser?.fullName || 'Cashier'
+      );
+    }
 
     const updated = await d1.get(db, 'SELECT * FROM invoices WHERE id = ?', id);
     return json(updated);

@@ -29,7 +29,8 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedTicketId, setSelectedTicketId] = useState(null);
   const [ticketInitialAction, setTicketInitialAction] = useState(null);
-  const [invoicePreselectId, setInvoicePreselectId] = useState(null);
+  const [invoicePreselectTicketId, setInvoicePreselectTicketId] = useState(null);
+  const [invoicePreselectInvoiceId, setInvoicePreselectInvoiceId] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Modals & Print Previews
@@ -175,7 +176,8 @@ export default function App() {
 
   // Direct invoice generation from ticket
   const handleGenerateInvoiceFromTicket = (ticketId) => {
-    setInvoicePreselectId(ticketId);
+    setInvoicePreselectTicketId(ticketId);
+    setInvoicePreselectInvoiceId(null);
     setCurrentTab('invoices');
   };
 
@@ -238,6 +240,25 @@ export default function App() {
     );
   }
 
+  const handleNavigate = (tab, params) => {
+    if (tab === 'invoices') {
+      if (params?.ticketId) {
+        setInvoicePreselectTicketId(params.ticketId);
+        setInvoicePreselectInvoiceId(null);
+      } else if (params?.invoiceId) {
+        setInvoicePreselectInvoiceId(params.invoiceId);
+        setInvoicePreselectTicketId(null);
+      }
+      setCurrentTab('invoices');
+      return;
+    }
+    if (params?.ticketId) {
+      handleSelectTicket(params.ticketId);
+      return;
+    }
+    setCurrentTab(tab);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Navigation */}
@@ -280,18 +301,7 @@ export default function App() {
             <Dashboard
               onSelectTicket={handleSelectTicket}
               onOpenNewTicket={() => setIsNewTicketOpen(true)}
-              onNavigate={(tab, params) => {
-                if (params?.ticketId) {
-                  handleSelectTicket(params.ticketId);
-                  return;
-                }
-                if (params?.invoiceId) {
-                  setInvoicePreselectId(params.invoiceId);
-                  setCurrentTab('invoices');
-                  return;
-                }
-                setCurrentTab(tab);
-              }}
+              onNavigate={handleNavigate}
               currentUser={currentUser}
             />
           )}
@@ -335,12 +345,18 @@ export default function App() {
           {currentTab === 'customers' && currentUser?.role !== 'technician' && (
             <Customers
               onSelectTicket={handleSelectTicket}
+              onNavigate={handleNavigate}
             />
           )}
 
           {currentTab === 'invoices' && currentUser?.role !== 'technician' && (
             <Invoices
-              preselectedTicketId={invoicePreselectId}
+              preselectedTicketId={invoicePreselectTicketId}
+              preselectedInvoiceId={invoicePreselectInvoiceId}
+              onClearPreselect={() => {
+                setInvoicePreselectTicketId(null);
+                setInvoicePreselectInvoiceId(null);
+              }}
               onPrintInvoice={handlePrintInvoice}
               onSelectTicket={handleSelectTicket}
             />

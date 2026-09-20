@@ -12,12 +12,15 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
+  CreditCard,
+  CheckCircle2,
+  AlertCircle,
   X
 } from 'lucide-react';
 import { api } from '../api';
 import EditCustomerModal from '../components/EditCustomerModal';
 
-export default function Customers({ onSelectTicket }) {
+export default function Customers({ onSelectTicket, onNavigate }) {
   const [customers, setCustomers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -208,8 +211,21 @@ export default function Customers({ onSelectTicket }) {
               )}
 
               <div className="pt-2 border-t border-slate-700/50 flex items-center justify-between text-xs">
-                <span className="text-slate-400">Total Billed:</span>
-                <span className="font-bold text-emerald-400">₹{parseFloat(c.total_spent || 0).toLocaleString()}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400">Billed:</span>
+                  <span className="font-bold text-slate-200">₹{parseFloat(c.total_spent || 0).toLocaleString()}</span>
+                </div>
+                {Number(c.total_due || 0) > 0 ? (
+                  <div className="flex items-center gap-1 font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/25">
+                    <span>Due:</span>
+                    <span>₹{Number(c.total_due).toLocaleString()}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/25 text-[11px]">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Settled</span>
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -275,10 +291,82 @@ export default function Customers({ onSelectTicket }) {
               )}
             </div>
 
+            {/* Financial Overview Card */}
+            <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-800/80 border border-slate-750 rounded-xl">
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium">Total Billed</p>
+                <p className="text-base font-bold text-white mt-0.5">
+                  ₹{Number(selectedCustomer.total_spent || 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium">Outstanding Due</p>
+                <p className={`text-base font-bold mt-0.5 ${Number(selectedCustomer.total_due || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  ₹{Number(selectedCustomer.total_due || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            {/* Invoices & Billing History */}
+            {selectedCustomer.invoices && selectedCustomer.invoices.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3 flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>Invoices & Billing ({selectedCustomer.invoices.length})</span>
+                </h4>
+                <div className="space-y-2.5">
+                  {selectedCustomer.invoices.map(inv => {
+                    const billed = Number(inv.grand_total) || 0;
+                    const paid = Number(inv.amount_paid) || 0;
+                    const due = Number(inv.balance_due) || 0;
+                    const isPaid = inv.payment_status === 'Paid' || due === 0;
+                    return (
+                      <div
+                        key={inv.id}
+                        className="p-3 bg-slate-800/80 border border-slate-700/80 rounded-xl space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-emerald-400">{inv.invoice_number}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            isPaid
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                              : 'bg-rose-500/10 text-rose-400 border-rose-500/25'
+                          }`}>
+                            {inv.payment_status || (due === 0 ? 'Paid' : 'Unpaid')}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-300 text-[11px]">
+                          <span>Billed: ₹{billed.toLocaleString()}</span>
+                          <span>Paid: ₹{paid.toLocaleString()}</span>
+                          <span className={due > 0 ? 'text-rose-400 font-bold' : 'text-slate-400'}>
+                            Due: ₹{due.toLocaleString()}
+                          </span>
+                        </div>
+                        {due > 0 && onNavigate && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCustomer(null);
+                              onNavigate('invoices', { invoiceId: inv.id });
+                            }}
+                            className="w-full py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-98"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Collect Payment / Settle (₹{due.toLocaleString()})</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Repair History List */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-3">
-                Service & Repair History ({selectedCustomer.tickets ? selectedCustomer.tickets.length : 0})
+              <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-3 flex items-center gap-1.5">
+                <Laptop className="w-3.5 h-3.5" />
+                <span>Service & Repair History ({selectedCustomer.tickets ? selectedCustomer.tickets.length : 0})</span>
               </h4>
               <div className="space-y-3">
                 {selectedCustomer.tickets && selectedCustomer.tickets.length === 0 ? (
@@ -303,12 +391,28 @@ export default function Customers({ onSelectTicket }) {
                         {t.brand} {t.model} ({t.device_type})
                       </p>
                       <p className="text-[11px] text-slate-400 line-clamp-1">{t.problem_description}</p>
-                      <div className="text-[10px] text-slate-500 pt-1 flex justify-between">
+                      <div className="text-[10px] text-slate-500 pt-1 flex justify-between items-center">
                         <span>{new Date(t.created_at).toLocaleDateString('en-GB')}</span>
-                        {t.grand_total && (
+                        {t.grand_total ? (
                           <span className="font-bold text-emerald-400">₹{parseFloat(t.grand_total).toLocaleString()}</span>
-                        )}
+                        ) : t.estimated_cost ? (
+                          <span className="text-slate-400">Est: ₹{parseFloat(t.estimated_cost).toLocaleString()}</span>
+                        ) : null}
                       </div>
+                      {onNavigate && ['READY_FOR_PICKUP', 'DELIVERED', 'RESOLVED'].includes(t.status) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCustomer(null);
+                            onNavigate('invoices', { ticketId: t.id });
+                          }}
+                          className="w-full mt-2 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                        >
+                          <Receipt className="w-3 h-3" />
+                          <span>Generate / View Invoice</span>
+                        </button>
+                      )}
                     </div>
                   ))
                 )}

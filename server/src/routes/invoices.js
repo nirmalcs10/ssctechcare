@@ -29,8 +29,8 @@ router.get('/', async (req, res) => {
         t.brand as device_brand,
         t.model as device_model
       FROM invoices inv
-      JOIN customers c ON inv.customer_id = c.id
-      JOIN tickets t ON inv.ticket_id = t.id
+      LEFT JOIN customers c ON inv.customer_id = c.id
+      LEFT JOIN tickets t ON inv.ticket_id = t.id
       WHERE 1=1
     `;
     const params = [];
