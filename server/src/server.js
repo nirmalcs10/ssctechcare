@@ -12,6 +12,7 @@ const customersRouter = require('./routes/customers');
 const techniciansRouter = require('./routes/technicians');
 const invoicesRouter = require('./routes/invoices');
 const dashboardRouter = require('./routes/dashboard');
+const revenueRouter = require('./routes/revenue');
 const trackingRouter = require('./routes/tracking');
 const settingsRouter = require('./routes/settings');
 
@@ -43,6 +44,7 @@ app.use('/api/customers', requireMasterAuth, requireAuth, customersRouter);
 app.use('/api/technicians', requireMasterAuth, requireAuth, techniciansRouter);
 app.use('/api/invoices', requireMasterAuth, requireAuth, invoicesRouter);
 app.use('/api/dashboard', requireMasterAuth, requireAuth, dashboardRouter);
+app.use('/api/revenue', requireMasterAuth, requireAuth, revenueRouter);
 app.use('/api/settings', requireMasterAuth, requireAuth, settingsRouter);
 
 // Health check endpoint

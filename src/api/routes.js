@@ -460,7 +460,7 @@ export async function handleApiRequest(request, env) {
   }
 
   // Revenue & Financial Analytics
-  if ((path === '/api/revenue/analytics' || path === '/api/dashboard/analytics') && method === 'GET') {
+  if ((path === '/api/revenue' || path === '/api/revenue/' || path === '/api/revenue/analytics' || path === '/api/dashboard/analytics') && method === 'GET') {
     if (staffUser && staffUser.role === 'frontdesk') {
       return err('Access denied: Revenue and financial analytics are restricted.', 403);
     }
