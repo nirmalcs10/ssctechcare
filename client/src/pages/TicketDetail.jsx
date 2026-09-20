@@ -84,10 +84,6 @@ export default function TicketDetail({
   const [deliveryPaymentAmount, setDeliveryPaymentAmount] = useState('');
   const [deliveryMarkDelivered, setDeliveryMarkDelivered] = useState(true);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
-  const [deliveryLaborCharges, setDeliveryLaborCharges] = useState('800');
-  const [deliveryTaxRate, setDeliveryTaxRate] = useState('18');
-  const [deliveryDiscount, setDeliveryDiscount] = useState('0');
-  const [deliveryNotes, setDeliveryNotes] = useState('Device delivered and handed over to customer.');
 
   useEffect(() => {
     loadTicketData();
@@ -104,15 +100,6 @@ export default function TicketDetail({
   const handleOpenDelivery = () => {
     if (ticket?.invoice) {
       setDeliveryPaymentAmount(String(ticket.invoice.balance_due ?? 0));
-    } else {
-      const pSum = (ticket?.parts || []).reduce((acc, p) => acc + (p.total_price || 0), 0);
-      const labor = (ticket?.parts && ticket.parts.length > 0) ? 1200 : 800;
-      setDeliveryLaborCharges(String(labor));
-      const sub = pSum + labor;
-      const tax = (sub * 18) / 100;
-      const grand = sub + tax;
-      const adv = parseFloat(ticket?.advance_paid || 0);
-      setDeliveryPaymentAmount(String(Math.max(0, Math.round(grand - adv))));
     }
     setIsDeliveryModalOpen(true);
   };
@@ -147,50 +134,6 @@ export default function TicketDetail({
       await loadTicketData();
     } catch (err) {
       alert('Payment recording failed: ' + err.message);
-    } finally {
-      setDeliveryLoading(false);
-    }
-  };
-
-  const handleQuickInvoiceAndDeliver = async (e) => {
-    if (e) e.preventDefault();
-    setDeliveryLoading(true);
-    try {
-      const labor = parseFloat(deliveryLaborCharges) || 0;
-      const taxR = parseFloat(deliveryTaxRate) || 0;
-      const disc = parseFloat(deliveryDiscount) || 0;
-      const pSum = (ticket.parts || []).reduce((acc, p) => acc + (p.total_price || 0), 0);
-      const sub = pSum + labor;
-      const taxA = (sub * taxR) / 100;
-      const grand = Math.max(0, sub + taxA - disc);
-      const adv = parseFloat(ticket.advance_paid || 0);
-      const paidNow = deliveryPaymentAmount !== '' ? parseFloat(deliveryPaymentAmount) : Math.max(0, grand - adv);
-
-      const newInv = await api.createInvoice({
-        ticket_id: ticket.id,
-        labor_charges: labor,
-        parts_total: pSum,
-        tax_rate: taxR,
-        discount: disc,
-        advance_deducted: adv,
-        amount_paid: paidNow,
-        payment_method: deliveryPaymentMethod,
-        notes: deliveryNotes
-      });
-
-      if (deliveryMarkDelivered) {
-        await api.updateTicketStatus(
-          ticket.id,
-          'DELIVERED',
-          `Device handed over to customer. Invoice ${newInv.invoice_number} generated with ₹${paidNow.toLocaleString()} collected via ${deliveryPaymentMethod}.`,
-          currentUser?.fullName || 'Staff'
-        );
-      }
-
-      setIsDeliveryModalOpen(false);
-      await loadTicketData();
-    } catch (err) {
-      alert('Failed to generate invoice & deliver: ' + err.message);
     } finally {
       setDeliveryLoading(false);
     }
@@ -255,10 +198,6 @@ export default function TicketDetail({
   };
 
   const handleStatusChange = async (newStatus) => {
-    if (newStatus === 'DELIVERED') {
-      handleOpenDelivery();
-      return;
-    }
     try {
       await api.updateTicketStatus(ticket.id, newStatus, '', 'Technician');
       loadTicketData();
@@ -1276,136 +1215,45 @@ export default function TicketDetail({
                     </div>
                   </div>
 
-                  {/* Quick Settle & Delivery Form */}
-                  <form onSubmit={handleQuickInvoiceAndDeliver} className="space-y-3 p-4 bg-slate-800/60 rounded-2xl border border-slate-700">
-                    <div className="flex items-center justify-between border-b border-slate-700 pb-2">
-                      <span className="font-bold text-white flex items-center gap-1.5">
-                        <CreditCard className="w-4 h-4 text-emerald-400" />
-                        <span>Quick Settle & Bill</span>
-                      </span>
+                  {/* Handover Without Auto-Invoice */}
+                  <div className="p-4 bg-slate-800/60 rounded-2xl border border-slate-700 space-y-4">
+                    <p className="text-slate-300 text-xs">
+                      Ready to deliver this repaired device to <strong>{ticket.customer_name}</strong>.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-700">
                       <button
                         type="button"
-                        onClick={() => onGenerateInvoice(ticket.id)}
-                        className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 underline"
+                        onClick={() => {
+                          setIsDeliveryModalOpen(false);
+                          onGenerateInvoice(ticket.id);
+                        }}
+                        className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-750 text-sky-400 border border-slate-700 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5"
                       >
-                        Open Full Invoice Page
+                        <Receipt className="w-4 h-4" />
+                        <span>Go to Invoices to Create Invoice</span>
                       </button>
-                    </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      <div>
-                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Labor (₹)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={deliveryLaborCharges}
-                          onChange={e => {
-                            setDeliveryLaborCharges(e.target.value);
-                            const l = parseFloat(e.target.value) || 0;
-                            const t = parseFloat(deliveryTaxRate) || 0;
-                            const sub = partsTotal + l;
-                            const tot = sub + (sub * t) / 100 - (parseFloat(deliveryDiscount) || 0);
-                            setDeliveryPaymentAmount(String(Math.max(0, Math.round(tot - parseFloat(ticket.advance_paid || 0)))));
-                          }}
-                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Tax (%)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={deliveryTaxRate}
-                          onChange={e => {
-                            setDeliveryTaxRate(e.target.value);
-                            const l = parseFloat(deliveryLaborCharges) || 0;
-                            const t = parseFloat(e.target.value) || 0;
-                            const sub = partsTotal + l;
-                            const tot = sub + (sub * t) / 100 - (parseFloat(deliveryDiscount) || 0);
-                            setDeliveryPaymentAmount(String(Math.max(0, Math.round(tot - parseFloat(ticket.advance_paid || 0)))));
-                          }}
-                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Discount (₹)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={deliveryDiscount}
-                          onChange={e => {
-                            setDeliveryDiscount(e.target.value);
-                            const l = parseFloat(deliveryLaborCharges) || 0;
-                            const t = parseFloat(deliveryTaxRate) || 0;
-                            const sub = partsTotal + l;
-                            const tot = sub + (sub * t) / 100 - (parseFloat(e.target.value) || 0);
-                            setDeliveryPaymentAmount(String(Math.max(0, Math.round(tot - parseFloat(ticket.advance_paid || 0)))));
-                          }}
-                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-semibold"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      <div>
-                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Amount to Pay Now (₹)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={deliveryPaymentAmount}
-                          onChange={e => setDeliveryPaymentAmount(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-emerald-400 font-bold text-xs"
-                          placeholder="Amount paid"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-300 text-[11px] font-medium mb-1">Payment Method</label>
-                        <select
-                          value={deliveryPaymentMethod}
-                          onChange={e => setDeliveryPaymentMethod(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs"
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setIsDeliveryModalOpen(false)}
+                          className="flex-1 sm:flex-none px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl font-medium text-xs"
                         >
-                          <option value="Cash">Cash</option>
-                          <option value="UPI / QR">UPI / QR Code</option>
-                          <option value="Card">Credit / Debit Card</option>
-                          <option value="Bank Transfer">Bank Transfer</option>
-                        </select>
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleConfirmDirectDelivery}
+                          disabled={deliveryLoading}
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/30 text-xs transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          <Truck className="w-4 h-4" />
+                          <span>{deliveryLoading ? 'Saving...' : 'Confirm Delivery'}</span>
+                        </button>
                       </div>
                     </div>
-
-                    <label className="flex items-center gap-2 cursor-pointer pt-1">
-                      <input
-                        type="checkbox"
-                        checked={deliveryMarkDelivered}
-                        onChange={e => setDeliveryMarkDelivered(e.target.checked)}
-                        className="rounded border-slate-700 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-slate-300 text-[11px]">
-                        Mark repair job as <strong>DELIVERED</strong> after invoice generation
-                      </span>
-                    </label>
-
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-700">
-                      <button
-                        type="button"
-                        onClick={() => setIsDeliveryModalOpen(false)}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl font-medium text-xs"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={deliveryLoading}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/30 text-xs transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        <span>{deliveryLoading ? 'Generating...' : 'Bill, Collect & Deliver'}</span>
-                      </button>
-                    </div>
-                  </form>
+                  </div>
                 </div>
               )}
             </div>

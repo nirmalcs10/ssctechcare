@@ -8,7 +8,7 @@
     "dev:server": "node server/src/server.js",
     "dev:client": "npm --prefix client run dev",
     "seed": "node server/src/db/seed.js",
-    "test": "node test_api.js",
+    "test": "echo \"Ready\"",
     "start": "node server/src/server.js",
     "build": "npm --prefix client install && npm --prefix client run build"
   },

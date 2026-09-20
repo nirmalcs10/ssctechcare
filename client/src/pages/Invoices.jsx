@@ -147,22 +147,6 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
         payment_method: payMethod
       });
 
-      if (payInvoice.ticket_id) {
-        try {
-          const t = await api.getTicket(payInvoice.ticket_id);
-          if (t && t.status === 'READY_FOR_PICKUP') {
-            if (confirm(`Payment recorded. Ticket ${t.ticket_number} is currently 'Ready for Pickup'. Mark device as DELIVERED now?`)) {
-              await api.updateTicketStatus(
-                t.id,
-                'DELIVERED',
-                `Payment of ₹${parseFloat(payAmount).toLocaleString()} recorded via ${payMethod}. Device delivered to customer.`,
-                'Billing'
-              );
-            }
-          }
-        } catch (ignoreErr) {}
-      }
-
       setIsPayOpen(false);
       setPayInvoice(null);
       setPayAmount('');
