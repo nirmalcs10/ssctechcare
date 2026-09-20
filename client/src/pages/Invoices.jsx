@@ -140,6 +140,7 @@ export default function Invoices({
     try {
       const res = await api.createInvoice({
         ticket_id: selectedTicketId,
+        parts_total: partsSum,
         labor_charges: parseFloat(laborCharges || 0),
         tax_rate: parseFloat(taxRate || 0),
         discount: parseFloat(discount || 0),

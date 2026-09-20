@@ -1391,24 +1391,39 @@ export async function handleApiRequest(request, env) {
 
     let targetCustomerId = customer_id;
     let targetAdvance = Number(advance_deducted) || 0;
+    let parts = Math.max(0, Number(parts_total) || 0);
 
     // If ticket_id provided, verify ticket & existing invoice
     if (ticket_id) {
       const ticket = await d1.get(db, 'SELECT * FROM tickets WHERE id = ?', ticket_id);
       if (!ticket) return err('Ticket not found', 404);
       targetCustomerId = targetCustomerId || ticket.customer_id;
-      targetAdvance = targetAdvance || Number(ticket.advance_paid || 0);
+      if (advance_deducted === undefined) {
+        targetAdvance = Number(ticket.advance_paid || 0);
+      }
 
       const existingInv = await d1.get(db, 'SELECT invoice_number FROM invoices WHERE ticket_id = ?', ticket_id);
       if (existingInv) {
         return err(`An invoice (${existingInv.invoice_number}) already exists for this repair job`, 409);
+      }
+
+      // Automatically query parts sum from ticket_parts to ensure parts total is accurate
+      const partsSumRow = await d1.get(
+        db,
+        'SELECT COALESCE(SUM(total_price), 0) as total FROM ticket_parts WHERE ticket_id = ?',
+        ticket_id
+      );
+      if (partsSumRow && partsSumRow.total !== undefined && partsSumRow.total !== null) {
+        const dbPartsTotal = Math.round(Number(partsSumRow.total) * 100) / 100;
+        if (dbPartsTotal > 0 || !parts) {
+          parts = dbPartsTotal;
+        }
       }
     }
 
     if (!targetCustomerId) return err('Customer ID is required', 400);
 
     const labor = Math.max(0, Number(labor_charges) || 0);
-    const parts = Math.max(0, Number(parts_total) || 0);
     const subtotal = Math.round((labor + parts) * 100) / 100;
     const rate = Math.max(0, Math.min(100, Number(tax_rate) || 0));
     const taxAmount = Math.round(((subtotal * rate) / 100) * 100) / 100;
