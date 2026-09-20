@@ -236,6 +236,11 @@ export const api = {
     return request('/dashboard');
   },
 
+  // Revenue & Financial Analytics
+  getRevenueAnalytics: async () => {
+    return request('/revenue/analytics');
+  },
+
   // Tickets
   getTickets: async (params = {}) => {
     const query = new URLSearchParams(params).toString();

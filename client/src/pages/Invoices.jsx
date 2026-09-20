@@ -9,15 +9,18 @@ import {
   DollarSign, 
   CreditCard,
   Eye,
-  X
+  X,
+  TrendingUp
 } from 'lucide-react';
 import { api } from '../api';
+import RevenueModal from '../components/RevenueModal';
 
 export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTicketId }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
 
   // Create Invoice Modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -173,17 +176,27 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
           <h1 className="text-2xl font-bold text-white tracking-tight">Billing & Tax Invoices</h1>
           <p className="text-sm text-slate-400">Generate customer receipts, compute labor + parts, and manage collections</p>
         </div>
-        <button
-          onClick={() => {
-            setSelectedTicketId('');
-            setTicketDetails(null);
-            setIsCreateOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create New Invoice</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+          <button
+            onClick={() => setIsRevenueModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-sm"
+            title="View total revenue, customer dues, monthly profit, purchases & stock valuation"
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>Revenue & Financials</span>
+          </button>
+          <button
+            onClick={() => {
+              setSelectedTicketId('');
+              setTicketDetails(null);
+              setIsCreateOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create New Invoice</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs & Search */}
@@ -540,6 +553,22 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
           </div>
         </div>
       )}
+
+      {/* Revenue & Financial Breakdown Modal */}
+      <RevenueModal
+        isOpen={isRevenueModalOpen}
+        onClose={() => setIsRevenueModalOpen(false)}
+        onNavigate={() => {}}
+        onSettleInvoice={(invoiceId) => {
+          setIsRevenueModalOpen(false);
+          const inv = invoices.find(i => String(i.id) === String(invoiceId));
+          if (inv) {
+            setPayInvoice(inv);
+            setPayAmount(String(inv.balance_due || ''));
+            setIsPayOpen(true);
+          }
+        }}
+      />
     </div>
   );
 }

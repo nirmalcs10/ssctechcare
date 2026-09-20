@@ -19,10 +19,12 @@ import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import { formatTime } from '../utils/date';
+import RevenueModal from '../components/RevenueModal';
 
 export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate, currentUser }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -167,17 +169,21 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
         {/* Total Revenue (Hidden/Removed for Front Desk) */}
         {data.totalRevenue != null && currentUser?.role !== 'frontdesk' && (
           <div 
-            onClick={() => onNavigate('invoices')}
-            className="bg-slate-800/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl cursor-pointer transition-all group"
+            onClick={() => setIsRevenueModalOpen(true)}
+            className="bg-slate-800/60 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 p-4 rounded-2xl cursor-pointer transition-all group hover:shadow-lg hover:shadow-emerald-500/10"
+            title="Click to view total revenue, customer dues, monthly profit, purchases & unused stock"
           >
             <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-medium">Revenue</span>
+              <span className="text-xs font-medium group-hover:text-emerald-400 transition-colors">Revenue & Dues</span>
               <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
                 <TrendingUp className="w-4 h-4" />
               </div>
             </div>
             <div className="text-xl font-bold text-white">₹{Number(data.totalRevenue || 0).toLocaleString()}</div>
-            <div className="text-[11px] text-slate-400 mt-1">Due: ₹{data.totalPending != null ? Number(data.totalPending).toLocaleString() : '0'}</div>
+            <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+              <span>Due: <strong className="text-rose-400">₹{data.totalPending != null ? Number(data.totalPending).toLocaleString() : '0'}</strong></span>
+              <span className="text-[10px] text-emerald-400 font-semibold opacity-80 group-hover:opacity-100 transition-opacity">Breakdown &rarr;</span>
+            </div>
           </div>
         )}
       </div>
@@ -349,6 +355,17 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
           ))}
         </div>
       </div>
+
+      {/* Revenue & Financial Breakdown Modal */}
+      <RevenueModal
+        isOpen={isRevenueModalOpen}
+        onClose={() => setIsRevenueModalOpen(false)}
+        onNavigate={onNavigate}
+        onSettleInvoice={(invoiceId) => {
+          setIsRevenueModalOpen(false);
+          onNavigate('invoices', { invoiceId });
+        }}
+      />
     </div>
   );
 }
