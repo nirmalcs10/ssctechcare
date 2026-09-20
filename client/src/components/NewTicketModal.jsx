@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wrench, User, Laptop, CheckSquare, Shield, DollarSign, Calendar, AlertTriangle } from 'lucide-react';
+import { X, Wrench, User, Laptop, CheckSquare, Shield, DollarSign, Calendar, AlertTriangle, RotateCcw } from 'lucide-react';
 import { api } from '../api';
 import { formatLocalDate } from '../utils/date';
 
@@ -92,14 +92,10 @@ const PHYSICAL_CONDITIONS = [
   'Suspected liquid spill'
 ];
 
-export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [technicians, setTechnicians] = useState([]);
-  const [customBrand, setCustomBrand] = useState('');
-
-  // Form states
-  const [formData, setFormData] = useState({
+const getInitialFormData = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 2);
+  return {
     customer_phone: '',
     customer_name: '',
     customer_email: '',
@@ -125,21 +121,36 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
     priority: 'Normal',
     technician_id: '',
     estimated_cost: '',
-    estimated_delivery: '',
+    estimated_delivery: formatLocalDate(d),
     advance_paid: ''
-  });
+  };
+};
 
+export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [technicians, setTechnicians] = useState([]);
+  const [customBrand, setCustomBrand] = useState('');
+
+  // Form states - freshly initialized
+  const [formData, setFormData] = useState(getInitialFormData());
+
+  const resetForm = (techsList = technicians) => {
+    const fresh = getInitialFormData();
+    const activeTech = (techsList || []).find(t => t.status === 'Active');
+    if (activeTech) {
+      fresh.technician_id = activeTech.id;
+    }
+    setFormData(fresh);
+    setCustomBrand('');
+    setError('');
+  };
+
+  // Clear and reset form every time the modal is opened
   useEffect(() => {
     if (isOpen) {
+      resetForm();
       loadTechs();
-      setCustomBrand('');
-      // Set default delivery date 2 days from now in computer local date
-      const d = new Date();
-      d.setDate(d.getDate() + 2);
-      setFormData(prev => ({
-        ...prev,
-        estimated_delivery: formatLocalDate(d)
-      }));
     }
   }, [isOpen]);
 
@@ -147,8 +158,7 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
     try {
       const data = await api.getTechnicians();
       setTechnicians(data);
-      if (data.length > 0 && !formData.technician_id) {
-        // Pre-select first active technician (exclude Inactive and On Leave)
+      if (data.length > 0) {
         const firstActive = data.find(t => t.status === 'Active');
         if (firstActive) {
           setFormData(prev => ({ ...prev, technician_id: firstActive.id }));
@@ -157,6 +167,11 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
     } catch (err) {
       console.error('Failed to load technicians', err);
     }
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   // Phone auto-lookup
@@ -220,6 +235,7 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
       if (res.error) {
         setError(res.error);
       } else {
+        resetForm();
         onSuccess(res);
         onClose();
       }
@@ -233,8 +249,8 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl my-2 sm:my-8 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={handleClose}>
+      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl my-2 sm:my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-800/60 border-b border-slate-800">
           <div className="flex items-center gap-2 sm:gap-2.5">
@@ -246,12 +262,24 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
               <p className="text-[11px] sm:text-xs text-slate-400">Intake device details, accessories checklist, and customer contact</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => resetForm()}
+              className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg flex items-center gap-1.5 transition-colors border border-slate-700/60"
+              title="Clear all form fields"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Clear Form</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -555,21 +583,32 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-800">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+              onClick={() => resetForm()}
+              className="px-3 py-2 text-xs font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors flex items-center gap-1.5 border border-slate-700/60"
+              title="Clear all inputs"
             >
-              Cancel
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Clear Form</span>
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 rounded-xl shadow-lg shadow-sky-500/20 transition-all active:scale-95 disabled:opacity-50"
-            >
-              {loading ? 'Creating Job Card...' : 'Save & Generate Ticket'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 rounded-xl shadow-lg shadow-sky-500/20 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {loading ? 'Creating Job Card...' : 'Save & Generate Ticket'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
