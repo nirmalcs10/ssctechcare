@@ -558,7 +558,17 @@ export default function Invoices({ onPrintInvoice, onSelectTicket, preselectedTi
       <RevenueModal
         isOpen={isRevenueModalOpen}
         onClose={() => setIsRevenueModalOpen(false)}
-        onNavigate={() => {}}
+        onNavigate={(tab, params) => {
+          setIsRevenueModalOpen(false);
+          if (params?.ticketId) {
+            if (tab === 'tickets' && onSelectTicket) {
+              onSelectTicket(params.ticketId);
+            } else {
+              setSelectedTicketId(params.ticketId);
+              setIsCreateOpen(true);
+            }
+          }
+        }}
         onSettleInvoice={(invoiceId) => {
           setIsRevenueModalOpen(false);
           const inv = invoices.find(i => String(i.id) === String(invoiceId));

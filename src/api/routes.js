@@ -393,7 +393,27 @@ export async function handleApiRequest(request, env) {
          FROM invoices`
       );
       totalRevenue = revRow ? Number(revRow.total_revenue) : 0;
-      totalPending = revRow ? Number(revRow.total_pending) : 0;
+      let invoicePending = revRow ? Number(revRow.total_pending) : 0;
+
+      // Include active uninvoiced repair jobs with pending balance
+      const allActiveTickets = await d1.all(
+        db,
+        `SELECT 
+           t.id, t.estimated_cost, t.advance_paid,
+           (SELECT COALESCE(SUM(total_price), 0) FROM ticket_parts WHERE ticket_id = t.id) as parts_sum
+         FROM tickets t
+         WHERE t.status != 'CANCELLED'
+           AND t.id NOT IN (SELECT ticket_id FROM invoices WHERE ticket_id IS NOT NULL)`
+      );
+      let ticketPending = 0;
+      (allActiveTickets || []).forEach(t => {
+        const parts = Number(t.parts_sum) || 0;
+        const est = Number(t.estimated_cost) || 0;
+        const jobTotal = Math.max(est, parts);
+        const adv = Number(t.advance_paid) || 0;
+        ticketPending += Math.max(0, jobTotal - adv);
+      });
+      totalPending = invoicePending + ticketPending;
     }
 
     const urgentTickets = await d1.all(
@@ -488,48 +508,139 @@ export async function handleApiRequest(request, env) {
        WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')`
     );
 
-    // 2. Customer-Wise Due Breakdown
-    const customerWiseDue = await d1.all(
+    // 2. Comprehensive Customer-Wise Due Breakdown (Invoices + Active Uninvoiced Repair Jobs)
+    const allCustomers = await d1.all(db, 'SELECT id, name, phone, email FROM customers ORDER BY name ASC');
+    const allInvoices = await d1.all(
+      db,
+      `SELECT inv.*, c.name as customer_name, c.phone as customer_phone, t.ticket_number
+       FROM invoices inv
+       JOIN customers c ON inv.customer_id = c.id
+       LEFT JOIN tickets t ON inv.ticket_id = t.id`
+    );
+    const allActiveTickets = await d1.all(
       db,
       `SELECT 
-         c.id as customer_id,
+         t.id as ticket_id,
+         t.ticket_number,
+         t.customer_id,
+         t.status as ticket_status,
+         t.estimated_cost,
+         t.advance_paid,
          c.name as customer_name,
          c.phone as customer_phone,
          c.email as customer_email,
-         COUNT(inv.id) as unpaid_invoice_count,
-         COALESCE(SUM(inv.balance_due), 0) as total_due,
-         COALESCE(SUM(inv.grand_total), 0) as total_invoiced,
-         COALESCE(SUM(inv.amount_paid), 0) as total_paid,
-         GROUP_CONCAT(inv.invoice_number, ', ') as invoice_numbers
-       FROM customers c
-       JOIN invoices inv ON c.id = inv.customer_id
-       WHERE inv.balance_due > 0
-       GROUP BY c.id, c.name, c.phone, c.email
-       ORDER BY total_due DESC`
+         (SELECT COALESCE(SUM(total_price), 0) FROM ticket_parts WHERE ticket_id = t.id) as parts_sum
+       FROM tickets t
+       JOIN customers c ON t.customer_id = c.id
+       WHERE t.status != 'CANCELLED'`
     );
 
-    const pendingInvoices = await d1.all(
-      db,
-      `SELECT 
-         inv.id,
-         inv.invoice_number,
-         inv.customer_id,
-         inv.ticket_id,
-         inv.grand_total,
-         inv.amount_paid,
-         inv.balance_due,
-         inv.payment_status,
-         inv.payment_method,
-         inv.created_at,
-         c.name as customer_name,
-         c.phone as customer_phone,
-         t.ticket_number
-       FROM invoices inv
-       JOIN customers c ON inv.customer_id = c.id
-       LEFT JOIN tickets t ON inv.ticket_id = t.id
-       WHERE inv.balance_due > 0
-       ORDER BY inv.balance_due DESC`
-    );
+    const invoicedTicketIds = new Set();
+    const customerMap = {};
+    const pendingInvoices = [];
+
+    (allCustomers || []).forEach(c => {
+      customerMap[c.id] = {
+        customer_id: c.id,
+        customer_name: c.name,
+        customer_phone: c.phone || '-',
+        customer_email: c.email || '',
+        total_due: 0,
+        total_invoiced: 0,
+        total_paid: 0,
+        unpaid_invoice_count: 0,
+        pending_ticket_count: 0,
+        items: [],
+        invoice_numbers: []
+      };
+    });
+
+    (allInvoices || []).forEach(inv => {
+      if (inv.ticket_id) invoicedTicketIds.add(inv.ticket_id);
+      const cid = inv.customer_id;
+      if (!customerMap[cid]) {
+        customerMap[cid] = {
+          customer_id: cid,
+          customer_name: inv.customer_name || 'Customer #' + cid,
+          customer_phone: inv.customer_phone || '-',
+          customer_email: '',
+          total_due: 0,
+          total_invoiced: 0,
+          total_paid: 0,
+          unpaid_invoice_count: 0,
+          pending_ticket_count: 0,
+          items: [],
+          invoice_numbers: []
+        };
+      }
+      const due = Number(inv.balance_due) || 0;
+      const billed = Number(inv.grand_total) || 0;
+      const paid = Number(inv.amount_paid) || 0;
+
+      customerMap[cid].total_invoiced += billed;
+      customerMap[cid].total_paid += paid;
+
+      if (due > 0) {
+        pendingInvoices.push(inv);
+        customerMap[cid].total_due += due;
+        customerMap[cid].unpaid_invoice_count += 1;
+        if (inv.invoice_number) customerMap[cid].invoice_numbers.push(inv.invoice_number);
+        customerMap[cid].items.push({
+          type: 'invoice',
+          id: inv.id,
+          ticket_id: inv.ticket_id,
+          ref: inv.invoice_number,
+          status: inv.payment_status || 'Unpaid',
+          total: billed,
+          paid: paid,
+          due: due
+        });
+      }
+    });
+
+    (allActiveTickets || []).forEach(t => {
+      if (!invoicedTicketIds.has(t.ticket_id)) {
+        const parts = Number(t.parts_sum) || 0;
+        const est = Number(t.estimated_cost) || 0;
+        const jobTotal = Math.max(est, parts);
+        const adv = Number(t.advance_paid) || 0;
+        const due = Math.max(0, jobTotal - adv);
+        const cid = t.customer_id;
+
+        if (customerMap[cid]) {
+          customerMap[cid].total_invoiced += jobTotal;
+          customerMap[cid].total_paid += adv;
+
+          if (due > 0) {
+            customerMap[cid].total_due += due;
+            customerMap[cid].pending_ticket_count += 1;
+            customerMap[cid].items.push({
+              type: 'ticket',
+              id: t.ticket_id,
+              ticket_id: t.ticket_id,
+              ref: t.ticket_number,
+              status: t.ticket_status,
+              total: jobTotal,
+              paid: adv,
+              due: due
+            });
+          }
+        }
+      }
+    });
+
+    const customerList = Object.values(customerMap);
+    const customerWiseDue = customerList
+      .filter(c => c.total_due > 0)
+      .map(c => ({
+        ...c,
+        invoice_numbers: c.invoice_numbers.length > 0 
+          ? c.invoice_numbers.join(', ') 
+          : c.items.map(it => it.ref).join(', ')
+      }))
+      .sort((a, b) => b.total_due - a.total_due);
+
+    const overallTotalDue = customerWiseDue.reduce((sum, c) => sum + c.total_due, 0);
 
     // 3. Total Profit This Month
     const monthInvoiceStats = await d1.get(
@@ -588,7 +699,7 @@ export async function handleApiRequest(request, env) {
     return json({
       totalRevenue: Number(allTimeRev?.total_revenue || 0),
       totalBilled: Number(allTimeRev?.total_billed || 0),
-      totalDue: Number(allTimeRev?.total_due || 0),
+      totalDue: overallTotalDue,
       allTimeInvoices: Number(allTimeRev?.total_invoices || 0),
 
       monthRevenue: Number(monthRev?.month_revenue || 0),
@@ -597,6 +708,7 @@ export async function handleApiRequest(request, env) {
       monthInvoices: Number(monthRev?.month_invoices || 0),
 
       customerWiseDue: customerWiseDue || [],
+      allCustomers: customerList || [],
       pendingInvoices: pendingInvoices || [],
 
       profitThisMonth: {

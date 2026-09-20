@@ -16,7 +16,10 @@ import {
   Calendar,
   Layers,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  CheckCircle2,
+  Wrench,
+  Users
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -26,6 +29,7 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
   const [error, setError] = useState(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [activeView, setActiveView] = useState('dues'); // 'dues' | 'profit' | 'inventory'
+  const [dueFilter, setDueFilter] = useState('pending'); // 'pending' | 'all'
 
   useEffect(() => {
     if (isOpen) {
@@ -34,9 +38,11 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
   }, [isOpen]);
 
   const fetchFallbackAnalytics = async () => {
-    const [invoices, inventory] = await Promise.all([
+    const [invoices, inventory, tickets, customers] = await Promise.all([
       api.getInvoices().catch(() => []),
-      api.getInventory().catch(() => [])
+      api.getInventory().catch(() => []),
+      api.getTickets().catch(() => []),
+      api.getCustomers().catch(() => [])
     ]);
 
     const now = new Date();
@@ -46,7 +52,6 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
 
     let totalRevenue = 0;
     let totalBilled = 0;
-    let totalDue = 0;
     let monthRevenue = 0;
     let monthBilled = 0;
     let monthDue = 0;
@@ -55,15 +60,32 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
     let monthDiscount = 0;
 
     const customerMap = {};
+    const invoicedTicketIds = new Set();
     const pendingInvoices = [];
 
+    (customers || []).forEach(c => {
+      customerMap[c.id] = {
+        customer_id: c.id,
+        customer_name: c.name,
+        customer_phone: c.phone || '-',
+        customer_email: c.email || '',
+        unpaid_invoice_count: 0,
+        pending_ticket_count: 0,
+        total_due: 0,
+        total_invoiced: 0,
+        total_paid: 0,
+        invoice_numbers: [],
+        items: []
+      };
+    });
+
     (invoices || []).forEach(inv => {
+      if (inv.ticket_id) invoicedTicketIds.add(inv.ticket_id);
       const paid = Number(inv.amount_paid) || 0;
       const billed = Number(inv.grand_total) || 0;
       const due = Number(inv.balance_due) || 0;
       totalRevenue += paid;
       totalBilled += billed;
-      totalDue += due;
 
       const created = inv.created_at || '';
       const isThisMonth = created.startsWith(curYearMonth);
@@ -76,34 +98,84 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
         monthDiscount += Number(inv.discount) || 0;
       }
 
+      const cid = inv.customer_id;
+      if (!customerMap[cid]) {
+        customerMap[cid] = {
+          customer_id: cid,
+          customer_name: inv.customer_name || 'Customer #' + cid,
+          customer_phone: inv.customer_phone || '-',
+          customer_email: inv.customer_email || '',
+          unpaid_invoice_count: 0,
+          pending_ticket_count: 0,
+          total_due: 0,
+          total_invoiced: 0,
+          total_paid: 0,
+          invoice_numbers: [],
+          items: []
+        };
+      }
+      customerMap[cid].total_invoiced += billed;
+      customerMap[cid].total_paid += paid;
+
       if (due > 0) {
         pendingInvoices.push(inv);
-        const cid = inv.customer_id;
-        if (!customerMap[cid]) {
-          customerMap[cid] = {
-            customer_id: cid,
-            customer_name: inv.customer_name || 'Customer',
-            customer_phone: inv.customer_phone || '-',
-            customer_email: inv.customer_email || '',
-            unpaid_invoice_count: 0,
-            total_due: 0,
-            total_invoiced: 0,
-            total_paid: 0,
-            invoice_numbers: []
-          };
-        }
         customerMap[cid].unpaid_invoice_count += 1;
         customerMap[cid].total_due += due;
-        customerMap[cid].total_invoiced += billed;
-        customerMap[cid].total_paid += paid;
         if (inv.invoice_number) customerMap[cid].invoice_numbers.push(inv.invoice_number);
+        customerMap[cid].items.push({
+          type: 'invoice',
+          id: inv.id,
+          ticket_id: inv.ticket_id,
+          ref: inv.invoice_number,
+          status: inv.payment_status || 'Unpaid',
+          total: billed,
+          paid: paid,
+          due: due
+        });
       }
     });
 
-    const customerWiseDue = Object.values(customerMap).map(c => ({
-      ...c,
-      invoice_numbers: c.invoice_numbers.join(', ')
-    })).sort((a, b) => b.total_due - a.total_due);
+    (tickets || []).forEach(t => {
+      if (t.status !== 'CANCELLED' && !invoicedTicketIds.has(t.id)) {
+        const est = Number(t.estimated_cost) || 0;
+        const adv = Number(t.advance_paid) || 0;
+        const due = Math.max(0, est - adv);
+        const cid = t.customer_id;
+
+        if (customerMap[cid]) {
+          customerMap[cid].total_invoiced += est;
+          customerMap[cid].total_paid += adv;
+
+          if (due > 0) {
+            customerMap[cid].total_due += due;
+            customerMap[cid].pending_ticket_count += 1;
+            customerMap[cid].items.push({
+              type: 'ticket',
+              id: t.id,
+              ticket_id: t.id,
+              ref: t.ticket_number,
+              status: t.status,
+              total: est,
+              paid: adv,
+              due: due
+            });
+          }
+        }
+      }
+    });
+
+    const customerList = Object.values(customerMap);
+    const customerWiseDue = customerList
+      .filter(c => c.total_due > 0)
+      .map(c => ({
+        ...c,
+        invoice_numbers: c.invoice_numbers.length > 0 
+          ? c.invoice_numbers.join(', ') 
+          : (c.items || []).map(it => it.ref).join(', ')
+      }))
+      .sort((a, b) => b.total_due - a.total_due);
+
+    const overallTotalDue = customerWiseDue.reduce((sum, c) => sum + c.total_due, 0);
 
     let totalUnusedStockCost = 0;
     let totalUnusedStockRetail = 0;
@@ -137,13 +209,14 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
     return {
       totalRevenue,
       totalBilled,
-      totalDue,
+      totalDue: overallTotalDue,
       allTimeInvoices: (invoices || []).length,
       monthRevenue,
       monthBilled,
       monthDue,
       monthInvoices: (invoices || []).filter(i => (i.created_at || '').startsWith(curYearMonth)).length,
       customerWiseDue,
+      allCustomers: customerList,
       pendingInvoices,
       profitThisMonth: {
         totalProfit: totalProfitThisMonth,
@@ -191,13 +264,18 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
 
   if (!isOpen) return null;
 
-  const filteredCustomerDues = (data?.customerWiseDue || []).filter(c => {
+  const displayedCustomers = dueFilter === 'all'
+    ? (data?.allCustomers && data.allCustomers.length > 0 ? data.allCustomers : data?.customerWiseDue || [])
+    : (data?.customerWiseDue || []);
+
+  const filteredCustomerDues = displayedCustomers.filter(c => {
     if (!customerSearch.trim()) return true;
     const term = customerSearch.toLowerCase();
     return (
       (c.customer_name || '').toLowerCase().includes(term) ||
       (c.customer_phone || '').includes(term) ||
-      (c.invoice_numbers || '').toLowerCase().includes(term)
+      (c.invoice_numbers || '').toLowerCase().includes(term) ||
+      (c.items || []).some(it => (it.ref || '').toLowerCase().includes(term))
     );
   });
 
@@ -463,26 +541,53 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                 <div className="bg-slate-850/90 border border-slate-750 rounded-2xl p-4 sm:p-5 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-bold text-white flex items-center gap-2">
-                        <span>Customer-Wise Outstanding Balances</span>
-                        <span className="px-2 py-0.5 text-xs font-bold rounded-lg bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                      <h3 className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                        <span>Customer Balances & Dues</span>
+                        <span className="px-2.5 py-0.5 text-xs font-bold rounded-lg bg-rose-500/15 text-rose-400 border border-rose-500/30">
                           Total Due: ₹{Number(data.totalDue || 0).toLocaleString()}
                         </span>
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        Breakdown of every customer with unsettled invoice amounts.
+                        Breakdown of every customer with unsettled invoices and active uninvoiced repair jobs.
                       </p>
                     </div>
 
-                    <div className="relative w-full sm:w-64">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={customerSearch}
-                        onChange={(e) => setCustomerSearch(e.target.value)}
-                        placeholder="Search customer, phone, invoice..."
-                        className="w-full pl-9 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-                      />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 p-1 bg-slate-800 rounded-xl border border-slate-700">
+                        <button
+                          onClick={() => setDueFilter('pending')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                            dueFilter === 'pending'
+                              ? 'bg-rose-500 text-white shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <AlertCircle className="w-3 h-3" />
+                          <span>Dues Only ({data.customerWiseDue?.length || 0})</span>
+                        </button>
+                        <button
+                          onClick={() => setDueFilter('all')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                            dueFilter === 'all'
+                              ? 'bg-slate-700 text-white shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Users className="w-3 h-3" />
+                          <span>All ({data.allCustomers?.length || data.customerWiseDue?.length || 0})</span>
+                        </button>
+                      </div>
+
+                      <div className="relative w-full sm:w-56">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={customerSearch}
+                          onChange={(e) => setCustomerSearch(e.target.value)}
+                          placeholder="Search customer, phone, ticket..."
+                          className="w-full pl-9 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -490,10 +595,10 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                     <div className="text-center py-12 text-slate-400 border border-dashed border-slate-750 rounded-2xl bg-slate-800/30">
                       <AlertCircle className="w-8 h-8 mx-auto text-emerald-400/60 mb-2" />
                       <p className="font-semibold text-slate-300 text-sm">
-                        {customerSearch ? 'No matching customer dues found.' : 'All clear! No customer has outstanding dues.'}
+                        {customerSearch ? 'No matching customers found.' : 'All clear! No customer has outstanding dues.'}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        All issued invoices are settled in full (₹0 pending balance).
+                        All invoices and repair jobs are fully paid and settled.
                       </p>
                     </div>
                   ) : (
@@ -503,9 +608,9 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                           <tr>
                             <th className="py-3 px-3.5">Customer</th>
                             <th className="py-3 px-3.5">Contact</th>
-                            <th className="py-3 px-3.5">Invoices</th>
-                            <th className="py-3 px-3.5 text-right">Billed</th>
-                            <th className="py-3 px-3.5 text-right">Paid</th>
+                            <th className="py-3 px-3.5">Reference (Invoice / Job)</th>
+                            <th className="py-3 px-3.5 text-right">Billed / Value</th>
+                            <th className="py-3 px-3.5 text-right">Paid / Advance</th>
                             <th className="py-3 px-3.5 text-right text-rose-400">Balance Due</th>
                             <th className="py-3 px-3.5 text-center">Action</th>
                           </tr>
@@ -514,8 +619,8 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                           {filteredCustomerDues.map((c) => (
                             <tr key={c.customer_id} className="hover:bg-slate-750/50 transition-colors">
                               <td className="py-3 px-3.5 font-bold text-white">
-                                <div>{c.customer_name}</div>
-                                {c.email && <div className="text-[10px] text-slate-400 font-normal">{c.email}</div>}
+                                <div className="text-slate-100">{c.customer_name}</div>
+                                {c.customer_email && <div className="text-[10px] text-slate-400 font-normal">{c.customer_email}</div>}
                               </td>
                               <td className="py-3 px-3.5">
                                 <a 
@@ -527,9 +632,33 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                                 </a>
                               </td>
                               <td className="py-3 px-3.5">
-                                <span className="font-mono text-xs text-slate-300 bg-slate-750/70 px-2 py-0.5 rounded-md border border-slate-700">
-                                  {c.invoice_numbers || `${c.unpaid_invoice_count} Invoice(s)`}
-                                </span>
+                                {c.items && c.items.length > 0 ? (
+                                  <div className="flex flex-col gap-1">
+                                    {c.items.slice(0, 3).map((it, idx) => (
+                                      <div 
+                                        key={idx} 
+                                        className={`inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded border max-w-fit ${
+                                          it.type === 'invoice'
+                                            ? 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+                                            : 'bg-sky-500/10 border-sky-500/25 text-sky-300'
+                                        }`}
+                                      >
+                                        <span className="font-bold">{it.type === 'invoice' ? 'Inv' : 'Job'}:</span>
+                                        <span>{it.ref}</span>
+                                        {it.due > 0 && (
+                                          <span className="text-rose-400 font-bold ml-1">₹{Number(it.due).toLocaleString()}</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {c.items.length > 3 && (
+                                      <span className="text-[10px] text-slate-400">+{c.items.length - 3} more</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="font-mono text-xs text-slate-400 bg-slate-750/70 px-2 py-0.5 rounded-md border border-slate-700">
+                                    {c.invoice_numbers || '-'}
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-3.5 text-right font-medium text-slate-300">
                                 ₹{Number(c.total_invoiced || 0).toLocaleString()}
@@ -537,29 +666,64 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
                               <td className="py-3 px-3.5 text-right font-medium text-emerald-400">
                                 ₹{Number(c.total_paid || 0).toLocaleString()}
                               </td>
-                              <td className="py-3 px-3.5 text-right font-black text-rose-400 text-sm">
-                                ₹{Number(c.total_due || 0).toLocaleString()}
+                              <td className="py-3 px-3.5 text-right font-black text-sm">
+                                {Number(c.total_due) > 0 ? (
+                                  <span className="text-rose-400 font-bold">₹{Number(c.total_due).toLocaleString()}</span>
+                                ) : (
+                                  <span className="text-emerald-400 font-medium">₹0</span>
+                                )}
                               </td>
                               <td className="py-3 px-3.5 text-center">
-                                <button
-                                  onClick={() => {
-                                    onClose();
-                                    if (onSettleInvoice) {
-                                      const inv = (data.pendingInvoices || []).find(i => i.customer_id === c.customer_id);
-                                      if (inv) {
-                                        onSettleInvoice(inv.id);
-                                      } else {
-                                        onNavigate('invoices');
-                                      }
-                                    } else {
-                                      onNavigate('invoices');
-                                    }
-                                  }}
-                                  className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-[11px] shadow-sm flex items-center gap-1 mx-auto transition-all active:scale-95"
-                                >
-                                  <CreditCard className="w-3 h-3" />
-                                  <span>Settle</span>
-                                </button>
+                                {Number(c.total_due) > 0 ? (
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    {(c.unpaid_invoice_count > 0 || (c.items || []).some(i => i.type === 'invoice' && i.due > 0)) && (
+                                      <button
+                                        onClick={() => {
+                                          onClose();
+                                          if (onSettleInvoice) {
+                                            const inv = (data.pendingInvoices || []).find(i => i.customer_id === c.customer_id)
+                                              || (c.items || []).find(i => i.type === 'invoice');
+                                            if (inv) {
+                                              onSettleInvoice(inv.id);
+                                            } else {
+                                              onNavigate('invoices');
+                                            }
+                                          } else {
+                                            onNavigate('invoices');
+                                          }
+                                        }}
+                                        className="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-[11px] shadow-sm flex items-center gap-1 transition-all active:scale-95"
+                                        title="Settle unpaid invoice"
+                                      >
+                                        <CreditCard className="w-3 h-3" />
+                                        <span>Settle</span>
+                                      </button>
+                                    )}
+
+                                    {((c.items || []).some(i => i.type === 'ticket' && i.due > 0)) && (
+                                      <button
+                                        onClick={() => {
+                                          onClose();
+                                          const ticketItem = (c.items || []).find(i => i.type === 'ticket');
+                                          if (ticketItem) {
+                                            onNavigate('invoices', { ticketId: ticketItem.ticket_id });
+                                          } else {
+                                            onNavigate('invoices');
+                                          }
+                                        }}
+                                        className="px-2.5 py-1 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-lg font-bold text-[11px] shadow-sm flex items-center gap-1 transition-all active:scale-95"
+                                        title="Create invoice or bill repair job"
+                                      >
+                                        <Receipt className="w-3 h-3" />
+                                        <span>Bill Job</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-md">
+                                    <CheckCircle2 className="w-3 h-3" /> Settled
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))}

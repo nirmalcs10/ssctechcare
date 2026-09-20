@@ -280,7 +280,18 @@ export default function App() {
             <Dashboard
               onSelectTicket={handleSelectTicket}
               onOpenNewTicket={() => setIsNewTicketOpen(true)}
-              onNavigate={tab => setCurrentTab(tab)}
+              onNavigate={(tab, params) => {
+                if (params?.ticketId) {
+                  handleSelectTicket(params.ticketId);
+                  return;
+                }
+                if (params?.invoiceId) {
+                  setInvoicePreselectId(params.invoiceId);
+                  setCurrentTab('invoices');
+                  return;
+                }
+                setCurrentTab(tab);
+              }}
               currentUser={currentUser}
             />
           )}
