@@ -33,11 +33,153 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
     }
   }, [isOpen]);
 
+  const fetchFallbackAnalytics = async () => {
+    const [invoices, inventory] = await Promise.all([
+      api.getInvoices().catch(() => []),
+      api.getInventory().catch(() => [])
+    ]);
+
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const curYearMonth = `${curYear}-${curMonth}`;
+
+    let totalRevenue = 0;
+    let totalBilled = 0;
+    let totalDue = 0;
+    let monthRevenue = 0;
+    let monthBilled = 0;
+    let monthDue = 0;
+    let monthLabor = 0;
+    let monthPartsTotal = 0;
+    let monthDiscount = 0;
+
+    const customerMap = {};
+    const pendingInvoices = [];
+
+    (invoices || []).forEach(inv => {
+      const paid = Number(inv.amount_paid) || 0;
+      const billed = Number(inv.grand_total) || 0;
+      const due = Number(inv.balance_due) || 0;
+      totalRevenue += paid;
+      totalBilled += billed;
+      totalDue += due;
+
+      const created = inv.created_at || '';
+      const isThisMonth = created.startsWith(curYearMonth);
+      if (isThisMonth) {
+        monthRevenue += paid;
+        monthBilled += billed;
+        monthDue += due;
+        monthLabor += Number(inv.labor_charges) || 0;
+        monthPartsTotal += Number(inv.parts_total) || 0;
+        monthDiscount += Number(inv.discount) || 0;
+      }
+
+      if (due > 0) {
+        pendingInvoices.push(inv);
+        const cid = inv.customer_id;
+        if (!customerMap[cid]) {
+          customerMap[cid] = {
+            customer_id: cid,
+            customer_name: inv.customer_name || 'Customer',
+            customer_phone: inv.customer_phone || '-',
+            customer_email: inv.customer_email || '',
+            unpaid_invoice_count: 0,
+            total_due: 0,
+            total_invoiced: 0,
+            total_paid: 0,
+            invoice_numbers: []
+          };
+        }
+        customerMap[cid].unpaid_invoice_count += 1;
+        customerMap[cid].total_due += due;
+        customerMap[cid].total_invoiced += billed;
+        customerMap[cid].total_paid += paid;
+        if (inv.invoice_number) customerMap[cid].invoice_numbers.push(inv.invoice_number);
+      }
+    });
+
+    const customerWiseDue = Object.values(customerMap).map(c => ({
+      ...c,
+      invoice_numbers: c.invoice_numbers.join(', ')
+    })).sort((a, b) => b.total_due - a.total_due);
+
+    let totalUnusedStockCost = 0;
+    let totalUnusedStockRetail = 0;
+    let totalStockUnits = 0;
+    let monthPurchase = 0;
+    let monthPurchaseUnits = 0;
+    let monthPurchaseItems = 0;
+
+    (inventory || []).forEach(item => {
+      const qty = Number(item.stock_quantity) || 0;
+      const cost = Number(item.cost_price) || 0;
+      const retail = Number(item.selling_price) || 0;
+
+      if (qty > 0) {
+        totalUnusedStockCost += qty * cost;
+        totalUnusedStockRetail += qty * retail;
+        totalStockUnits += qty;
+      }
+
+      const created = item.created_at || '';
+      if (created.startsWith(curYearMonth)) {
+        monthPurchase += qty * cost;
+        monthPurchaseUnits += qty;
+        monthPurchaseItems += 1;
+      }
+    });
+
+    const partsMargin = Math.max(0, monthPartsTotal * 0.35);
+    const totalProfitThisMonth = Math.max(0, (monthLabor + partsMargin) - monthDiscount);
+
+    return {
+      totalRevenue,
+      totalBilled,
+      totalDue,
+      allTimeInvoices: (invoices || []).length,
+      monthRevenue,
+      monthBilled,
+      monthDue,
+      monthInvoices: (invoices || []).filter(i => (i.created_at || '').startsWith(curYearMonth)).length,
+      customerWiseDue,
+      pendingInvoices,
+      profitThisMonth: {
+        totalProfit: totalProfitThisMonth,
+        laborIncome: monthLabor,
+        partsRevenue: monthPartsTotal,
+        partsCost: Math.max(0, monthPartsTotal - partsMargin),
+        partsMargin,
+        discountGiven: monthDiscount,
+        totalCollected: monthRevenue
+      },
+      purchaseThisMonth: {
+        totalPurchase: monthPurchase,
+        unitsPurchased: monthPurchaseUnits,
+        itemsCount: monthPurchaseItems
+      },
+      unusedStock: {
+        totalCost: totalUnusedStockCost,
+        totalRetail: totalUnusedStockRetail,
+        potentialProfit: Math.max(0, totalUnusedStockRetail - totalUnusedStockCost),
+        totalUnits: totalStockUnits,
+        distinctSkus: (inventory || []).filter(i => (Number(i.stock_quantity) || 0) > 0).length
+      }
+    };
+  };
+
   const loadAnalytics = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await api.getRevenueAnalytics();
+      let res;
+      try {
+        res = await api.getRevenueAnalytics();
+      } catch (err) {
+        console.warn('Direct analytics endpoint unavailable, calculating from standard collections:', err);
+        res = await fetchFallbackAnalytics();
+      }
       setData(res);
     } catch (err) {
       console.error('Failed to load revenue analytics:', err);
