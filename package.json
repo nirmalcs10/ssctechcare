@@ -8,6 +8,9 @@
     "dev:server": "node server/src/server.js",
     "dev:client": "npm --prefix client run dev",
     "seed": "node server/src/db/seed.js",
+    "db:status": "node scripts/sync_db.js --status",
+    "db:pull": "node scripts/sync_db.js --pull",
+    "db:push": "node scripts/sync_db.js --push",
     "test": "echo \"Ready\"",
     "start": "node server/src/server.js",
     "build": "npm --prefix client install && npm --prefix client run build"

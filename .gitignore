@@ -11,8 +11,10 @@ server/data/*.db-*
 server/data/*.sqlite*
 server/data/*.bak
 server/data/backups/*
+backups/*
 !server/data/.gitkeep
 !server/data/backups/.gitkeep
+!backups/.gitkeep
 
 # Environment variables
 .env
