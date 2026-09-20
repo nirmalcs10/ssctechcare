@@ -333,6 +333,12 @@ export const api = {
     });
   },
 
+  deduplicateInventory: async () => {
+    return request('/inventory/deduplicate', {
+      method: 'POST'
+    });
+  },
+
   // Customers
   getCustomers: async (search = '') => {
     return request(`/customers?search=${encodeURIComponent(search)}`);

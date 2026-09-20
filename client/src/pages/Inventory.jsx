@@ -74,13 +74,42 @@ export default function Inventory() {
     }
   };
 
+  const duplicateNames = (() => {
+    const seen = new Set();
+    const dups = new Set();
+    items.forEach(i => {
+      const n = (i.name || '').trim().toLowerCase();
+      if (!n) return;
+      if (seen.has(n)) dups.add(n);
+      else seen.add(n);
+    });
+    return dups;
+  })();
+
   const handleAddItem = async (e) => {
     e.preventDefault();
+    const finalName = newItem.name?.trim() || (newItem.brand_compat ? `${newItem.brand_compat} ${newItem.category}` : `${newItem.category} Component`);
+    
+    // Check if this part already exists
+    const existing = items.find(
+      i => i.name.trim().toLowerCase() === finalName.toLowerCase()
+    );
+    if (existing) {
+      if (confirm(`A part named "${existing.name}" already exists with stock ${existing.stock_quantity}. Would you like to adjust the stock of the existing part instead of creating a duplicate?`)) {
+        setIsAddOpen(false);
+        setStockItem(existing);
+        setStockChange(newItem.stock_quantity || '1');
+        setIsStockOpen(true);
+        return;
+      }
+      return;
+    }
+
     try {
       await api.createInventoryItem({
         ...newItem,
-        sku: `${newItem.category.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-6)}`,
-        name: newItem.name?.trim() || (newItem.brand_compat ? `${newItem.brand_compat} ${newItem.category}` : `${newItem.category} Component`)
+        name: finalName,
+        sku: `${newItem.category.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-6)}`
       });
       setIsAddOpen(false);
       setNewItem({
@@ -97,6 +126,22 @@ export default function Inventory() {
       loadCategories();
     } catch (err) {
       alert('Failed to add part: ' + err.message);
+    }
+  };
+
+  const handleDeduplicate = async () => {
+    if (!confirm('This will find and merge all duplicate parts with the same name, preserving your stock and repair history. Proceed?')) {
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await api.deduplicateInventory();
+      alert(res.message || 'Duplicates cleaned successfully');
+      await loadInventory();
+    } catch (err) {
+      alert('Failed to deduplicate: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -136,14 +181,44 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold text-white tracking-tight">Spare Parts & Warehouse Inventory</h1>
           <p className="text-sm text-slate-400">Track replacement displays, SSDs, RAM, batteries, cooling fans & thermals</p>
         </div>
-        <button
-          onClick={() => setIsAddOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Spare Part</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {duplicateNames.size > 0 && (
+            <button
+              onClick={handleDeduplicate}
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold transition-all active:scale-95"
+              title="Remove duplicate parts"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Remove {duplicateNames.size} Duplicate(s)</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95 self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Spare Part</span>
+          </button>
+        </div>
       </div>
+
+      {/* Duplicate Warning Banner */}
+      {duplicateNames.size > 0 && (
+        <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-300 text-xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Found <strong>{duplicateNames.size}</strong> duplicate part item(s) in warehouse inventory.
+            </span>
+          </div>
+          <button
+            onClick={handleDeduplicate}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition-colors whitespace-nowrap self-start sm:self-auto"
+          >
+            Clean Duplicates Now
+          </button>
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="flex flex-col md:flex-row items-center gap-3 justify-between">
@@ -321,6 +396,12 @@ export default function Inventory() {
                   onChange={e => setNewItem({ ...newItem, name: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-sky-500 focus:outline-none placeholder-slate-500"
                 />
+                {newItem.name?.trim() && items.some(i => i.name?.trim().toLowerCase() === newItem.name?.trim().toLowerCase()) && (
+                  <p className="mt-1.5 text-[11px] text-amber-400 flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 p-1.5 rounded-lg">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>A part with this name already exists in inventory. Adding will create a duplicate.</span>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

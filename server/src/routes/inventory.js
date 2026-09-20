@@ -88,9 +88,19 @@ router.post('/', async (req, res) => {
       name = brand_compat ? `${brand_compat} ${category}` : `${category} ${serial_no ? '(' + serial_no + ')' : 'Spare'}`;
     }
 
-    const existing = await db.prepare('SELECT id FROM inventory WHERE sku = ?').get(sku);
+    const trimmedName = (name || '').trim();
+    const existing = await db.prepare(`
+      SELECT id, name, sku, stock_quantity 
+      FROM inventory 
+      WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+         OR (sku IS NOT NULL AND sku != '' AND LOWER(TRIM(sku)) = LOWER(TRIM(?)))
+      LIMIT 1
+    `).get(trimmedName, sku);
+
     if (existing) {
-      return res.status(400).json({ error: `Part with SKU / Serial "${sku}" already exists` });
+      return res.status(400).json({ 
+        error: `A part named "${existing.name}" already exists in inventory (SKU: ${existing.sku}, Current Stock: ${existing.stock_quantity}). Please adjust existing stock or use a distinct part name.` 
+      });
     }
 
     const insert = await db.prepare(`
@@ -98,7 +108,7 @@ router.post('/', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(
       sku,
-      name,
+      trimmedName,
       category,
       brand_compat || '',
       serial_no || '',
@@ -110,6 +120,47 @@ router.post('/', async (req, res) => {
     );
 
     res.status(201).json({ id: insert.lastInsertRowid, message: 'Item added to inventory' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/inventory/deduplicate - Automatically clean and merge duplicate inventory rows
+router.post('/deduplicate', async (req, res) => {
+  try {
+    const allItems = await db.all('SELECT * FROM inventory ORDER BY id ASC');
+    const groups = {};
+
+    allItems.forEach(item => {
+      const key = (item.name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+
+    let mergedCount = 0;
+    const removedIds = [];
+
+    for (const [key, itemsList] of Object.entries(groups)) {
+      if (itemsList.length <= 1) continue;
+
+      const primary = itemsList[0];
+      const duplicates = itemsList.slice(1);
+
+      for (const dup of duplicates) {
+        await db.run('UPDATE ticket_parts SET inventory_id = ? WHERE inventory_id = ?', [primary.id, dup.id]);
+        await db.run('DELETE FROM inventory WHERE id = ?', [dup.id]);
+        removedIds.push(dup.id);
+        mergedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: mergedCount > 0 ? `Successfully removed ${mergedCount} duplicate item(s)` : 'No duplicates found in warehouse inventory',
+      mergedCount,
+      removedIds
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

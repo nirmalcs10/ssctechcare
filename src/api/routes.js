@@ -1047,20 +1047,69 @@ export async function handleApiRequest(request, env) {
     return json(rows.map(r => r.category));
   }
 
+  if (path === '/api/inventory/deduplicate' && method === 'POST') {
+    const allItems = await d1.all(db, 'SELECT * FROM inventory ORDER BY id ASC');
+    const groups = {};
+
+    (allItems || []).forEach(item => {
+      const key = (item.name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+
+    let mergedCount = 0;
+    const removedIds = [];
+
+    for (const [key, itemsList] of Object.entries(groups)) {
+      if (itemsList.length <= 1) continue;
+
+      const primary = itemsList[0];
+      const duplicates = itemsList.slice(1);
+
+      for (const dup of duplicates) {
+        await d1.run(db, 'UPDATE ticket_parts SET inventory_id = ? WHERE inventory_id = ?', primary.id, dup.id);
+        await d1.run(db, 'DELETE FROM inventory WHERE id = ?', dup.id);
+        removedIds.push(dup.id);
+        mergedCount++;
+      }
+    }
+
+    return json({
+      success: true,
+      message: mergedCount > 0 ? `Successfully removed ${mergedCount} duplicate item(s)` : 'No duplicates found in warehouse inventory',
+      mergedCount,
+      removedIds
+    });
+  }
+
   if (path === '/api/inventory' && method === 'POST') {
     let { sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location } = body;
     if (!name) return err('Part name is required', 400);
 
+    const trimmedName = name.trim();
     if (!sku) {
       const prefix = (category || 'PART').substring(0, 3).toUpperCase();
       sku = `${prefix}-${Date.now().toString().slice(-6)}`;
+    }
+
+    const existing = await d1.get(
+      db,
+      `SELECT id, name, sku, stock_quantity FROM inventory 
+       WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) 
+          OR (sku IS NOT NULL AND sku != '' AND LOWER(TRIM(sku)) = LOWER(TRIM(?)))
+       LIMIT 1`,
+      trimmedName, sku
+    );
+    if (existing) {
+      return err(`A part named "${existing.name}" already exists in inventory (SKU: ${existing.sku}, Current Stock: ${existing.stock_quantity}). Please update existing stock instead.`, 400);
     }
 
     const res = await d1.run(
       db,
       `INSERT INTO inventory (sku, name, category, brand_compat, serial_no, cost_price, selling_price, stock_quantity, min_threshold, location)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      sku, name, category || 'General', brand_compat || '', serial_no || null,
+      sku, trimmedName, category || 'General', brand_compat || '', serial_no || null,
       Number(cost_price) || 0, Number(selling_price) || 0, Number(stock_quantity) || 0,
       Number(min_threshold) || 3, location || ''
     );
