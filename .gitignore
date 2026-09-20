@@ -3,8 +3,7 @@ node_modules/
 client/node_modules/
 
 # Production Build
-client/dist/
-dist/
+/dist/
 
 # SQLite Databases & Backups (Preserve directories via .gitkeep)
 server/data/*.db
