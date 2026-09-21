@@ -5,7 +5,9 @@ import {
   Plus, 
   Printer, 
   X, 
-  TrendingUp
+  TrendingUp,
+  Calendar,
+  Filter
 } from 'lucide-react';
 import { api } from '../api';
 import RevenueModal from '../components/RevenueModal';
@@ -20,8 +22,65 @@ export default function Invoices({
   const [invoices, setInvoices] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [datePreset, setDatePreset] = useState('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
+
+  // Helper date conversions
+  const toYMD = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  const getDateRangeForPreset = (preset) => {
+    const now = new Date();
+    if (preset === 'TODAY') {
+      const today = toYMD(now);
+      return { start: today, end: today };
+    }
+    if (preset === 'LAST_7_DAYS') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 6);
+      return { start: toYMD(past), end: toYMD(now) };
+    }
+    if (preset === 'THIS_MONTH') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: toYMD(firstDay), end: toYMD(lastDay) };
+    }
+    if (preset === 'LAST_MONTH') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { start: toYMD(firstDay), end: toYMD(lastDay) };
+    }
+    return { start: '', end: '' };
+  };
+
+  const handlePresetChange = (preset) => {
+    setDatePreset(preset);
+    if (preset === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+    } else if (preset === 'CUSTOM') {
+      if (!startDate && !endDate) {
+        const today = toYMD(new Date());
+        setStartDate(today);
+        setEndDate(today);
+      }
+    } else {
+      const range = getDateRangeForPreset(preset);
+      setStartDate(range.start);
+      setEndDate(range.end);
+    }
+  };
+
+  const handleClearDateFilter = () => {
+    setDatePreset('ALL');
+    setStartDate('');
+    setEndDate('');
+  };
 
   // Create Invoice Modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -47,6 +106,8 @@ export default function Invoices({
       const params = {};
       if (selectedStatus !== 'ALL') params.status = selectedStatus;
       if (searchQuery) params.search = searchQuery;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
 
       const data = await api.getInvoices(params);
       setInvoices(data);
@@ -82,7 +143,7 @@ export default function Invoices({
   useEffect(() => {
     loadInvoices();
     loadTickets();
-  }, [selectedStatus, searchQuery]);
+  }, [selectedStatus, searchQuery, startDate, endDate]);
 
   // Handle direct invoice settlement request
   useEffect(() => {
@@ -184,6 +245,11 @@ export default function Invoices({
   const paidNow = parseFloat(amountPaidNow || 0);
   const balanceDue = Math.max(0, grandTotal - advance - paidNow);
 
+  // Financial summary metrics for currently filtered invoices
+  const totalBilledFiltered = invoices.reduce((sum, inv) => sum + (parseFloat(inv.grand_total) || 0), 0);
+  const totalPaidFiltered = invoices.reduce((sum, inv) => sum + (parseFloat(inv.amount_paid) || 0), 0);
+  const totalDueFiltered = invoices.reduce((sum, inv) => sum + (parseFloat(inv.balance_due) || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -245,6 +311,95 @@ export default function Invoices({
         </div>
       </div>
 
+      {/* Date Filter Dropdown & Date-Wise Filter Toolbar */}
+      <div className="bg-slate-800/40 border border-slate-800 rounded-2xl p-3 sm:p-3.5 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Controls: Dropdown Preset & Custom Date Range */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 shrink-0">
+              <Calendar className="w-4 h-4 text-sky-400" />
+              <span>Date Filter:</span>
+            </div>
+
+            {/* Dropdown: Today, Last 7 Days, This month, Last month, Date Wise */}
+            <div className="relative">
+              <select
+                value={datePreset}
+                onChange={(e) => handlePresetChange(e.target.value)}
+                className="pl-3 pr-8 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer shadow-inner"
+              >
+                <option value="ALL">All Dates</option>
+                <option value="TODAY">Today</option>
+                <option value="LAST_7_DAYS">Last 7 Days</option>
+                <option value="THIS_MONTH">This month</option>
+                <option value="LAST_MONTH">Last month</option>
+                <option value="CUSTOM">Date wise (Custom Range)</option>
+              </select>
+            </div>
+
+            {/* Date-wise pickers */}
+            <div className="flex items-center gap-2 bg-slate-900/90 px-2.5 py-1 rounded-xl border border-slate-700/80">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <span>From:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setDatePreset('CUSTOM');
+                  }}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500 [color-scheme:dark]"
+                />
+              </div>
+              <span className="text-slate-500 text-xs">-</span>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <span>To:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setDatePreset('CUSTOM');
+                  }}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500 [color-scheme:dark]"
+                />
+              </div>
+
+              {(startDate || endDate || datePreset !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={handleClearDateFilter}
+                  className="ml-1 px-1.5 py-0.5 text-[11px] font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors flex items-center gap-1"
+                  title="Clear Date Filter"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar for Filtered Invoices */}
+          <div className="flex items-center gap-2.5 sm:gap-3 text-xs flex-wrap">
+            <span className="text-slate-400">
+              Invoices: <strong className="text-white">{invoices.length}</strong>
+            </span>
+            <span className="text-slate-700">|</span>
+            <span className="text-slate-400">
+              Billed: <strong className="text-sky-400 font-mono">₹{totalBilledFiltered.toLocaleString()}</strong>
+            </span>
+            <span className="text-slate-700">|</span>
+            <span className="text-slate-400">
+              Collected: <strong className="text-emerald-400 font-mono">₹{totalPaidFiltered.toLocaleString()}</strong>
+            </span>
+            <span className="text-slate-700">|</span>
+            <span className="text-slate-400">
+              Due: <strong className={totalDueFiltered > 0 ? "text-rose-400 font-mono font-bold" : "text-slate-400 font-mono"}>₹{totalDueFiltered.toLocaleString()}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Invoices Table */}
       <div className="bg-slate-800/40 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         {loading ? (
@@ -255,8 +410,28 @@ export default function Invoices({
         ) : invoices.length === 0 ? (
           <div className="text-center py-16 text-slate-400">
             <Receipt className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-base font-semibold text-slate-300">No invoices generated yet</p>
-            <p className="text-xs text-slate-500 mt-1">Create an invoice from an active repair ticket.</p>
+            <p className="text-base font-semibold text-slate-300">
+              {startDate || endDate || selectedStatus !== 'ALL' || searchQuery
+                ? 'No invoices match the selected filter criteria'
+                : 'No invoices generated yet'}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {startDate || endDate || selectedStatus !== 'ALL' || searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStatus('ALL');
+                    setSearchQuery('');
+                    handleClearDateFilter();
+                  }}
+                  className="text-sky-400 hover:text-sky-300 underline font-semibold cursor-pointer"
+                >
+                  Reset all filters
+                </button>
+              ) : (
+                'Create an invoice from an active repair ticket.'
+              )}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto touch-scroll overscroll-y-auto">

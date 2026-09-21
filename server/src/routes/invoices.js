@@ -20,7 +20,7 @@ async function getNextInvoiceNumber(attempt = 0) {
 // GET all invoices
 router.get('/', async (req, res) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, startDate, endDate } = req.query;
     let query = `
       SELECT 
         inv.*,
@@ -39,6 +39,16 @@ router.get('/', async (req, res) => {
     if (status && status !== 'ALL') {
       query += ` AND inv.payment_status = ?`;
       params.push(status);
+    }
+
+    if (startDate) {
+      query += ` AND substr(inv.created_at, 1, 10) >= ?`;
+      params.push(String(startDate).trim());
+    }
+
+    if (endDate) {
+      query += ` AND substr(inv.created_at, 1, 10) <= ?`;
+      params.push(String(endDate).trim());
     }
 
     if (search) {

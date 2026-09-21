@@ -1674,6 +1674,8 @@ export async function handleApiRequest(request, env) {
   if (path === '/api/invoices' && method === 'GET') {
     const search = url.searchParams.get('search') || '';
     const status = url.searchParams.get('status') || '';
+    const startDate = url.searchParams.get('startDate') || '';
+    const endDate = url.searchParams.get('endDate') || '';
     let sql = `
       SELECT inv.*, c.name as customer_name, c.phone as customer_phone,
              t.ticket_number, t.brand as device_brand, t.model as device_model
@@ -1687,6 +1689,16 @@ export async function handleApiRequest(request, env) {
     if (status && status !== 'ALL') {
       sql += ` AND inv.payment_status = ?`;
       params.push(status);
+    }
+
+    if (startDate) {
+      sql += ` AND substr(inv.created_at, 1, 10) >= ?`;
+      params.push(startDate.trim());
+    }
+
+    if (endDate) {
+      sql += ` AND substr(inv.created_at, 1, 10) <= ?`;
+      params.push(endDate.trim());
     }
 
     if (search) {
