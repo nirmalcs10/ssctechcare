@@ -313,8 +313,7 @@ router.post('/master-login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const isMasterAdminMatch = cleanEmail === 'nirmalaws10@gmail.com' && password === '071825';
-    const isValid = isMasterAdminMatch || db.verifyPassword(password, account.password_hash, account.salt);
+    const isValid = db.verifyPassword(password, account.password_hash, account.salt);
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -558,8 +557,7 @@ router.post('/master-verify-old-password', async (req, res) => {
       account = await db.prepare('SELECT id, email, password_hash, salt FROM master_accounts WHERE id = 2').get();
     }
 
-    const isMasterAdminMatch = rawEmail === 'nirmalaws10@gmail.com' && oldPassword === '071825';
-    const isValid = isMasterAdminMatch || (account && db.verifyPassword(oldPassword, account.password_hash, account.salt));
+    const isValid = account && db.verifyPassword(oldPassword, account.password_hash, account.salt);
 
     if (!account || !isValid) {
       return res.status(401).json({ error: 'Current password is incorrect. Please check and try again.' });
@@ -597,8 +595,7 @@ router.post('/master-reset-with-old-password', async (req, res) => {
       account = await db.prepare('SELECT id, email, password_hash, salt FROM master_accounts WHERE id = 2').get();
     }
 
-    const isMasterAdminMatch = rawEmail === 'nirmalaws10@gmail.com' && oldPassword === '071825';
-    const isValid = isMasterAdminMatch || (account && db.verifyPassword(oldPassword, account.password_hash, account.salt));
+    const isValid = account && db.verifyPassword(oldPassword, account.password_hash, account.salt);
 
     if (!account || !isValid) {
       return res.status(401).json({ error: 'Current password is incorrect. Please check and try again.' });

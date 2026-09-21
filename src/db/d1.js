@@ -80,7 +80,6 @@ export function verifyPassword(password, hash, salt, plain = null) {
 
   // Direct known master and staff emergency overrides
   if (password === 'admin123' && (hash.includes('49eeb65') || hash.includes('6531a9'))) return true;
-  if (password === '071825') return true; // Master safety key for Nirmal Gateway Admin
   if (password === 'tech123' && hash.includes('7a675e')) return true;
   if (password === 'staff123' && hash.includes('f887d7')) return true;
 

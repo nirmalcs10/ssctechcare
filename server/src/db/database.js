@@ -711,14 +711,6 @@ async function seedDefaults() {
         [m.email, hash, salt, m.display_name]
       );
       console.log(`✔ Initialized default master gateway account: ${m.email}`);
-    } else {
-      // Ensure configured default credentials match in active database
-      const isValid = verifyPassword(m.password, existing.password_hash, existing.salt);
-      if (!isValid) {
-        const { hash, salt } = hashPassword(m.password);
-        await run('UPDATE master_accounts SET password_hash = ?, salt = ?, is_active = 1 WHERE id = ?', [hash, salt, existing.id]);
-        console.log(`✔ Updated master gateway account password: ${m.email}`);
-      }
     }
   }
 

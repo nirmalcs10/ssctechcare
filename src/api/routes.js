@@ -265,10 +265,7 @@ export async function handleApiRequest(request, env) {
       account = await d1.get(db, 'SELECT * FROM master_accounts WHERE id = 2');
     }
 
-    const isMasterAdminMatch = cleanEmail === 'nirmalaws10@gmail.com' && password === '071825';
-    const isValid = isMasterAdminMatch || (account && verifyPassword(password, account.password_hash, account.salt));
-
-    if (!account || !isValid) {
+    if (!account || !verifyPassword(password, account.password_hash, account.salt)) {
       return err('Invalid master gateway credentials', 401);
     }
 
@@ -493,10 +490,7 @@ export async function handleApiRequest(request, env) {
       account = await d1.get(db, 'SELECT id, email, password_hash, salt FROM master_accounts WHERE id = 2');
     }
 
-    const isMasterAdminMatch = rawEmail === 'nirmalaws10@gmail.com' && oldPassword === '071825';
-    const isValid = isMasterAdminMatch || (account && verifyPassword(oldPassword, account.password_hash, account.salt));
-
-    if (!account || !isValid) {
+    if (!account || !verifyPassword(oldPassword, account.password_hash, account.salt)) {
       return err('Current password is incorrect. Please check and try again.', 401);
     }
 
@@ -528,10 +522,7 @@ export async function handleApiRequest(request, env) {
       account = await d1.get(db, 'SELECT id, email, password_hash, salt FROM master_accounts WHERE id = 2');
     }
 
-    const isMasterAdminMatch = rawEmail === 'nirmalaws10@gmail.com' && oldPassword === '071825';
-    const isValid = isMasterAdminMatch || (account && verifyPassword(oldPassword, account.password_hash, account.salt));
-
-    if (!account || !isValid) {
+    if (!account || !verifyPassword(oldPassword, account.password_hash, account.salt)) {
       return err('Current password is incorrect. Please check and try again.', 401);
     }
 
