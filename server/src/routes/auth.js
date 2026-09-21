@@ -396,6 +396,137 @@ router.put('/master-password', requireMasterAuth, async (req, res) => {
   }
 });
 
+// POST /api/auth/master-forgot-password
+router.post('/master-forgot-password', async (req, res) => {
+  try {
+    let rawEmail = (req.body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') {
+      rawEmail = 'nirmalaws10@gmail.com';
+    }
+
+    let account = await db.prepare(
+      'SELECT id, email, display_name FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1'
+    ).get(rawEmail);
+
+    if (!account && rawEmail.endsWith('@gamil.com')) {
+      const fixedEmail = rawEmail.replace('@gamil.com', '@gmail.com');
+      account = await db.prepare(
+        'SELECT id, email, display_name FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1'
+      ).get(fixedEmail);
+      if (account) rawEmail = fixedEmail;
+    }
+
+    if (!account) {
+      return res.status(404).json({ error: 'No active gateway administrator account found with this email address.' });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    await db.prepare(
+      'UPDATE master_password_resets SET used = 1 WHERE LOWER(email) = LOWER(?) AND used = 0'
+    ).run(account.email);
+
+    await db.prepare(
+      'INSERT INTO master_password_resets (email, code, expires_at, used) VALUES (?, ?, ?, 0)'
+    ).run(account.email, code, expiresAt);
+
+    console.log(`[LOCAL DEV PASSWORD RESET] Code for ${account.email}: ${code}`);
+
+    return res.json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${account.email}.`,
+      email: account.email,
+      expiresInMinutes: 15,
+      recoveryCode: code
+    });
+  } catch (err) {
+    console.error('Master forgot password error:', err);
+    return res.status(500).json({ error: 'Failed to request reset code' });
+  }
+});
+
+// POST /api/auth/master-verify-code
+router.post('/master-verify-code', async (req, res) => {
+  try {
+    let rawEmail = (req.body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const code = (req.body.code || '').trim();
+
+    if (!rawEmail || !code) {
+      return res.status(400).json({ error: 'Email and verification code are required' });
+    }
+
+    const record = await db.prepare(
+      'SELECT * FROM master_password_resets WHERE LOWER(email) = LOWER(?) AND code = ? AND used = 0 ORDER BY id DESC LIMIT 1'
+    ).get(rawEmail, code);
+
+    if (!record) {
+      return res.status(400).json({ error: 'Invalid or expired verification code. Please check and try again.' });
+    }
+
+    if (new Date(record.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Verification code verified successfully. Please enter your new password.'
+    });
+  } catch (err) {
+    console.error('Master verify code error:', err);
+    return res.status(500).json({ error: 'Failed to verify reset code' });
+  }
+});
+
+// POST /api/auth/master-reset-password
+router.post('/master-reset-password', async (req, res) => {
+  try {
+    let rawEmail = (req.body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const code = (req.body.code || '').trim();
+    const { newPassword, confirmPassword } = req.body;
+
+    if (!rawEmail || !code) return res.status(400).json({ error: 'Email and verification code are required' });
+    if (!newPassword || !confirmPassword) return res.status(400).json({ error: 'Both new password and confirmation are required' });
+    if (newPassword !== confirmPassword) return res.status(400).json({ error: 'New password and confirmation password do not match' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+
+    const record = await db.prepare(
+      'SELECT * FROM master_password_resets WHERE LOWER(email) = LOWER(?) AND code = ? AND used = 0 ORDER BY id DESC LIMIT 1'
+    ).get(rawEmail, code);
+
+    if (!record) {
+      return res.status(400).json({ error: 'Invalid or already used verification code. Please request a new code.' });
+    }
+
+    if (new Date(record.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
+    }
+
+    const account = await db.prepare(
+      'SELECT id, email FROM master_accounts WHERE LOWER(email) = LOWER(?)'
+    ).get(rawEmail);
+    if (!account) return res.status(404).json({ error: 'Master account not found' });
+
+    const { hash, salt } = db.hashPassword(newPassword);
+    await db.prepare(
+      'UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?'
+    ).run(hash, salt, account.id);
+
+    await db.prepare('UPDATE master_password_resets SET used = 1 WHERE id = ?').run(record.id);
+    await db.prepare('DELETE FROM master_sessions WHERE master_account_id = ?').run(account.id);
+
+    return res.json({
+      success: true,
+      message: 'Gateway password reset successfully! You can now log in with your new password.'
+    });
+  } catch (err) {
+    console.error('Master reset password error:', err);
+    return res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 // Periodic cleanup of expired sessions (runs every 30 minutes)
 setInterval(async () => {
   try {

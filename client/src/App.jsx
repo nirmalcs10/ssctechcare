@@ -42,18 +42,6 @@ export default function App() {
   // Summary Metrics for Sidebar badges
   const [metrics, setMetrics] = useState({ activeRepairs: 0, lowStockCount: 0 });
 
-  // Initial Auth & Theme Check
-  useEffect(() => {
-    applyAppearance();
-    checkAuth();
-
-    const handleThemeChange = () => {
-      applyAppearance();
-    };
-    window.addEventListener('ssc-appearance-changed', handleThemeChange);
-    return () => window.removeEventListener('ssc-appearance-changed', handleThemeChange);
-  }, []);
-
   const checkAuth = async () => {
     try {
       // Step 1: Check master session (Main Login gateway)
@@ -69,20 +57,48 @@ export default function App() {
           } else {
             setCurrentUser(null);
           }
-        } catch (err) {
+        } catch {
           setCurrentUser(null);
         }
       } else {
         setMasterUser(null);
         setCurrentUser(null);
       }
-    } catch (err) {
+    } catch {
       setMasterUser(null);
       setCurrentUser(null);
     } finally {
       setIsAuthChecking(false);
     }
   };
+
+  const loadMetrics = async () => {
+    try {
+      const [dash, settings] = await Promise.all([
+        api.getDashboard(),
+        api.getSettings()
+      ]);
+      setMetrics({
+        activeRepairs: dash.activeRepairs || 0,
+        lowStockCount: (dash.lowStockItems || []).length
+      });
+      setShopSettings(settings || {});
+    } catch (err) {
+      console.error('Failed to load metrics:', err);
+    }
+  };
+
+  // Initial Auth & Theme Check
+  useEffect(() => {
+    applyAppearance();
+    checkAuth();
+
+    const handleThemeChange = () => {
+      applyAppearance();
+    };
+    window.addEventListener('ssc-appearance-changed', handleThemeChange);
+    return () => window.removeEventListener('ssc-appearance-changed', handleThemeChange);
+  }, []);
 
   const handleMasterLogin = async (credentials) => {
     const data = await api.masterLogin(credentials);
@@ -128,22 +144,6 @@ export default function App() {
       setCurrentTab('dashboard');
     }
   }, [currentUser, currentTab]);
-
-  const loadMetrics = async () => {
-    try {
-      const [dash, settings] = await Promise.all([
-        api.getDashboard(),
-        api.getSettings()
-      ]);
-      setMetrics({
-        activeRepairs: dash.activeRepairs || 0,
-        lowStockCount: (dash.lowStockItems || []).length
-      });
-      setShopSettings(settings || {});
-    } catch (err) {
-      console.error('Failed to load metrics:', err);
-    }
-  };
 
   // Ticket selection
   const handleSelectTicket = (id, action = null) => {

@@ -163,6 +163,27 @@ export const api = {
     });
   },
 
+  masterForgotPassword: async (payload) => {
+    return request('/auth/master-forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  masterVerifyCode: async (payload) => {
+    return request('/auth/master-verify-code', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  masterResetPassword: async (payload) => {
+    return request('/auth/master-reset-password', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   masterLogout: async () => {
     try {
       await request('/auth/master-logout', { method: 'POST' });

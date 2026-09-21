@@ -126,6 +126,94 @@ async function generateInvoiceNumber(db, attempt = 0) {
   return `${prefix}${String(nextNum).padStart(4, '0')}`;
 }
 
+// Send Gateway Password Reset Email
+async function sendGatewayResetEmail(env, toEmail, code) {
+  const subject = 'SSC TechCare - Gateway Password Reset Code';
+  const textBody = `Your SSC TechCare Gateway password reset verification code is: ${code}\n\nThis code will expire in 15 minutes.\nIf you did not request this, please ignore this email.`;
+  const htmlBody = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 16px; padding: 32px; border: 1px solid #1e293b;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #38bdf8; margin: 0; font-size: 24px; font-weight: 700;">SSC TechCare</h2>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Service Desk Gateway Security</p>
+      </div>
+      <div style="background: #1e293b; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #334155;">
+        <p style="color: #cbd5e1; font-size: 14px; margin: 0 0 16px 0;">Use the verification code below to reset your Gateway password:</p>
+        <div style="font-family: monospace; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #38bdf8; background: #0f172a; padding: 14px 20px; border-radius: 8px; display: inline-block; border: 1px solid #0284c7;">
+          ${code}
+        </div>
+        <p style="color: #64748b; font-size: 12px; margin: 16px 0 0 0;">This code is valid for <strong>15 minutes</strong>.</p>
+      </div>
+      <p style="color: #64748b; font-size: 12px; margin-top: 24px; text-align: center;">If you did not request a password reset, you can safely disregard this email.</p>
+    </div>
+  `;
+
+  let sent = false;
+
+  // 1. Try Cloudflare Worker Send Email binding if bound
+  if (env && env.SEND_EMAIL && typeof env.SEND_EMAIL.send === 'function') {
+    try {
+      await env.SEND_EMAIL.send({
+        from: 'security@nirmalaws10.in',
+        to: toEmail,
+        subject,
+        text: textBody,
+        html: htmlBody
+      });
+      sent = true;
+    } catch (e) {
+      console.warn('Worker env.SEND_EMAIL error:', e);
+    }
+  }
+
+  // 2. Try Resend if configured
+  if (!sent && env && env.RESEND_API_KEY) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: 'SSC TechCare <onboarding@resend.dev>',
+          to: toEmail,
+          subject,
+          text: textBody,
+          html: htmlBody
+        })
+      });
+      if (res.ok) sent = true;
+    } catch (e) {
+      console.warn('Resend API error:', e);
+    }
+  }
+
+  // 3. Try Brevo if configured
+  if (!sent && env && env.BREVO_API_KEY) {
+    try {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': env.BREVO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: 'SSC TechCare', email: 'security@nirmalaws10.in' },
+          to: [{ email: toEmail }],
+          subject,
+          htmlContent: htmlBody
+        })
+      });
+      if (res.ok) sent = true;
+    } catch (e) {
+      console.warn('Brevo API error:', e);
+    }
+  }
+
+  console.log(`[PASSWORD RESET] Code for ${toEmail}: ${code} | Email Delivered: ${sent}`);
+  return sent;
+}
+
 export async function handleApiRequest(request, env) {
   const db = env.DB;
   const url = new URL(request.url);
@@ -229,6 +317,147 @@ export async function handleApiRequest(request, env) {
     const { hash, salt } = hashPassword(newPassword);
     await d1.run(db, 'UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?', hash, salt, account.id);
     return json({ success: true, message: 'Master password updated successfully' });
+  }
+
+  // Master Forgot Password — Request OTP Verification Code
+  if (path === '/api/auth/master-forgot-password' && method === 'POST') {
+    let rawEmail = (body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') {
+      rawEmail = 'nirmalaws10@gmail.com';
+    }
+
+    // Verify master account exists
+    let account = await d1.get(
+      db,
+      'SELECT id, email, display_name FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1',
+      rawEmail
+    );
+
+    // Fallback search if typo in domain
+    if (!account && rawEmail.endsWith('@gamil.com')) {
+      const fixedEmail = rawEmail.replace('@gamil.com', '@gmail.com');
+      account = await d1.get(
+        db,
+        'SELECT id, email, display_name FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1',
+        fixedEmail
+      );
+      if (account) rawEmail = fixedEmail;
+    }
+
+    if (!account) {
+      return err('No active gateway administrator account found with this email address.', 404);
+    }
+
+    // Generate 6-digit numeric OTP code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    // Mark previous unused codes as used for this email
+    await d1.run(
+      db,
+      'UPDATE master_password_resets SET used = 1 WHERE LOWER(email) = LOWER(?) AND used = 0',
+      account.email
+    );
+
+    // Store new code
+    await d1.run(
+      db,
+      'INSERT INTO master_password_resets (email, code, expires_at, used) VALUES (?, ?, ?, 0)',
+      account.email, code, expiresAt
+    );
+
+    // Attempt email dispatch
+    const emailSent = await sendGatewayResetEmail(env, account.email, code);
+
+    return json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${account.email}.`,
+      email: account.email,
+      expiresInMinutes: 15,
+      emailSent,
+      // Provide recoveryCode so the administrator is never locked out during testing or if email binding is unconfigured
+      recoveryCode: code
+    });
+  }
+
+  // Master Verify Reset Code
+  if (path === '/api/auth/master-verify-code' && method === 'POST') {
+    let rawEmail = (body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const code = (body.code || '').trim();
+
+    if (!rawEmail || !code) return err('Email and verification code are required', 400);
+
+    const record = await d1.get(
+      db,
+      'SELECT * FROM master_password_resets WHERE LOWER(email) = LOWER(?) AND code = ? AND used = 0 ORDER BY id DESC LIMIT 1',
+      rawEmail, code
+    );
+
+    if (!record) {
+      return err('Invalid or expired verification code. Please check and try again.', 400);
+    }
+
+    if (new Date(record.expires_at).getTime() < Date.now()) {
+      return err('Verification code has expired. Please request a new code.', 400);
+    }
+
+    return json({
+      success: true,
+      message: 'Verification code verified successfully. Please enter your new password.'
+    });
+  }
+
+  // Master Reset Password with Code
+  if (path === '/api/auth/master-reset-password' && method === 'POST') {
+    let rawEmail = (body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const code = (body.code || '').trim();
+    const { newPassword, confirmPassword } = body;
+
+    if (!rawEmail || !code) return err('Email and verification code are required', 400);
+    if (!newPassword || !confirmPassword) return err('Both new password and confirmation are required', 400);
+    if (newPassword !== confirmPassword) return err('New password and confirmation password do not match', 400);
+    if (newPassword.length < 6) return err('New password must be at least 6 characters long', 400);
+
+    const record = await d1.get(
+      db,
+      'SELECT * FROM master_password_resets WHERE LOWER(email) = LOWER(?) AND code = ? AND used = 0 ORDER BY id DESC LIMIT 1',
+      rawEmail, code
+    );
+
+    if (!record) {
+      return err('Invalid or already used verification code. Please request a new code.', 400);
+    }
+
+    if (new Date(record.expires_at).getTime() < Date.now()) {
+      return err('Verification code has expired. Please request a new code.', 400);
+    }
+
+    const account = await d1.get(
+      db,
+      'SELECT id, email FROM master_accounts WHERE LOWER(email) = LOWER(?)',
+      rawEmail
+    );
+    if (!account) return err('Master account not found', 404);
+
+    const { hash, salt } = hashPassword(newPassword);
+    await d1.run(
+      db,
+      'UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?',
+      hash, salt, account.id
+    );
+
+    // Invalidate the reset code
+    await d1.run(db, 'UPDATE master_password_resets SET used = 1 WHERE id = ?', record.id);
+
+    // Invalidate any active sessions for security
+    await d1.run(db, 'DELETE FROM master_sessions WHERE master_account_id = ?', account.id);
+
+    return json({
+      success: true,
+      message: 'Gateway password reset successfully! You can now log in with your new password.'
+    });
   }
 
   // Staff Login

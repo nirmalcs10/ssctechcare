@@ -7,11 +7,16 @@ import {
   EyeOff, 
   ShieldCheck, 
   ArrowRight, 
+  ArrowLeft,
   AlertCircle, 
-  SearchCheck,
-  CheckCircle2,
-  Cpu
+  SearchCheck, 
+  CheckCircle2, 
+  Cpu,
+  KeyRound,
+  RefreshCw,
+  Send
 } from 'lucide-react';
+import { api } from '../api';
 
 export default function MainLogin({ onLoginSuccess, onGoToTracker }) {
   const [email, setEmail] = useState('');
@@ -19,10 +24,26 @@ export default function MainLogin({ onLoginSuccess, onGoToTracker }) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loginSuccessNotice, setLoginSuccessNotice] = useState('');
+
+  // Forgot Password Workflow State
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: request code, 2: verify code, 3: set new password
+  const [resetEmail, setResetEmail] = useState('nirmalaws10@gmail.com');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [recoveryNotice, setRecoveryNotice] = useState('');
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     setError('');
+    setLoginSuccessNotice('');
 
     if (!email.trim() || !password) {
       setError('Please enter both email and password.');
@@ -36,6 +57,124 @@ export default function MainLogin({ onLoginSuccess, onGoToTracker }) {
       setError(err.message || 'Invalid email or password. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openForgotPassword = () => {
+    setIsForgotMode(true);
+    setForgotStep(1);
+    setResetEmail(email.trim() || 'nirmalaws10@gmail.com');
+    setResetCode('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetError('');
+    setResetSuccess('');
+    setRecoveryNotice('');
+  };
+
+  const closeForgotPassword = () => {
+    setIsForgotMode(false);
+    setForgotStep(1);
+    setResetError('');
+    setResetSuccess('');
+    setRecoveryNotice('');
+  };
+
+  // Step 1: Send OTP Verification Code
+  const handleRequestCode = async (e) => {
+    if (e) e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+    setRecoveryNotice('');
+
+    let target = (resetEmail || '').trim();
+    if (!target || target.toLowerCase() === 'nirmalaws10@gamil.com') {
+      target = 'nirmalaws10@gmail.com';
+      setResetEmail('nirmalaws10@gmail.com');
+    }
+
+    setResetLoading(true);
+    try {
+      const res = await api.masterForgotPassword({ email: target });
+      setResetSuccess(res.message || `Verification code sent to ${target}`);
+      if (res.recoveryCode) {
+        setRecoveryNotice(res.recoveryCode);
+      }
+      setForgotStep(2);
+    } catch (err) {
+      setResetError(err.message || 'Failed to send verification code. Please check your email and try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP Code
+  const handleVerifyCode = async (e) => {
+    if (e) e.preventDefault();
+    setResetError('');
+
+    const codeClean = resetCode.trim();
+    if (!codeClean || codeClean.length < 6) {
+      setResetError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await api.masterVerifyCode({
+        email: resetEmail.trim() || 'nirmalaws10@gmail.com',
+        code: codeClean
+      });
+      setResetSuccess('Verification code confirmed! Please choose a new password.');
+      setForgotStep(3);
+    } catch (err) {
+      setResetError(err.message || 'Invalid or expired verification code. Please try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // Step 3: Set New Password & Re-enter
+  const handleResetPassword = async (e) => {
+    if (e) e.preventDefault();
+    setResetError('');
+
+    if (!newPassword || !confirmPassword) {
+      setResetError('Please enter and confirm your new password.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetError('New password and confirmation password do not match.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setResetError('New password must be at least 6 characters long.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const target = resetEmail.trim() || 'nirmalaws10@gmail.com';
+      await api.masterResetPassword({
+        email: target,
+        code: resetCode.trim(),
+        newPassword,
+        confirmPassword
+      });
+
+      // Populate login form with updated credentials for instant 1-click login
+      setEmail(target);
+      setPassword(newPassword);
+      setIsForgotMode(false);
+      setForgotStep(1);
+      setError('');
+      setLoginSuccessNotice('Gateway password updated successfully! Click "Sign In" below to enter.');
+    } catch (err) {
+      setResetError(err.message || 'Failed to update password. Please try again.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -75,105 +214,407 @@ export default function MainLogin({ onLoginSuccess, onGoToTracker }) {
 
       {/* Center Auth Card */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 z-10 my-8">
-        <div className="w-full max-w-md bg-slate-900/90 border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 mb-4 shadow-inner">
-              <ShieldCheck className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Sign In</h1>
-            <p className="text-sm text-slate-400 mt-1">Enter your credentials to access SSC TechCare</p>
-          </div>
-
-          {/* Error Banner */}
-          {error && (
-            <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-start gap-2.5 animate-fadeIn">
-              <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. admin@ssctechcare.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm"
-                  autoComplete="email"
-                />
+        {!isForgotMode ? (
+          /* ================= SIGN IN CARD ================= */
+          <div className="w-full max-w-md bg-slate-900/90 border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 mb-4 shadow-inner">
+                <ShieldCheck className="w-7 h-7" />
               </div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Sign In</h1>
+              <p className="text-sm text-slate-400 mt-1">Enter your credentials to access SSC TechCare</p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-11 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm font-mono"
-                  autoComplete="current-password"
-                />
+            {/* Success Banner */}
+            {loginSuccessNotice && (
+              <div className="mb-6 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-start gap-2.5 animate-fadeIn">
+                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
+                <span>{loginSuccessNotice}</span>
+              </div>
+            )}
+
+            {/* Error Banner */}
+            {error && (
+              <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. admin@ssctechcare.com"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={openForgotPassword}
+                    className="text-xs text-sky-400 hover:text-sky-300 transition-colors font-medium"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-11 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all text-sm font-mono"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full mt-2 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 active:scale-[0.99] transition-all shadow-lg shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Signing In...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Customer Portal Shortcut */}
+            {onGoToTracker && (
+              <div className="mt-6 pt-5 border-t border-slate-800/50 text-center">
+                <p className="text-xs text-slate-400 mb-2">Are you a customer checking a computer in service?</p>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-                  tabIndex={-1}
+                  onClick={onGoToTracker}
+                  className="text-xs font-semibold text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1.5 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <SearchCheck className="w-3.5 h-3.5" />
+                  <span>Track Repair Status with Ticket Number</span>
                 </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ================= FORGOT PASSWORD CARD ================= */
+          <div className="w-full max-w-md bg-slate-900/90 border border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-3 shadow-inner">
+                <KeyRound className="w-7 h-7" />
+              </div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Reset Password</h1>
+              <p className="text-xs text-slate-400 mt-1">Gateway Administrator Access Recovery</p>
+
+              {/* Multi-step progression indicators */}
+              <div className="flex items-center justify-center gap-2 mt-4 text-[11px] font-semibold">
+                <span className={`px-2.5 py-1 rounded-full border transition-all ${
+                  forgotStep === 1 
+                    ? 'bg-sky-500/20 text-sky-400 border-sky-500/40 font-bold' 
+                    : forgotStep > 1 
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-slate-800 text-slate-500 border-slate-700'
+                }`}>
+                  1. Request Code
+                </span>
+                <span className="text-slate-600">&bull;</span>
+                <span className={`px-2.5 py-1 rounded-full border transition-all ${
+                  forgotStep === 2 
+                    ? 'bg-sky-500/20 text-sky-400 border-sky-500/40 font-bold' 
+                    : forgotStep > 2 
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-slate-800 text-slate-500 border-slate-700'
+                }`}>
+                  2. Enter Code
+                </span>
+                <span className="text-slate-600">&bull;</span>
+                <span className={`px-2.5 py-1 rounded-full border transition-all ${
+                  forgotStep === 3 
+                    ? 'bg-sky-500/20 text-sky-400 border-sky-500/40 font-bold' 
+                    : 'bg-slate-800 text-slate-500 border-slate-700'
+                }`}>
+                  3. New Password
+                </span>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full mt-2 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 active:scale-[0.99] transition-all shadow-lg shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Signing In...</span>
-                </>
-              ) : (
-                <>
-                  <span>Sign In</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
+            {/* Error Banner */}
+            {resetError && (
+              <div className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                <span>{resetError}</span>
+              </div>
+            )}
 
+            {/* Success Banner */}
+            {resetSuccess && (
+              <div className="mb-5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+                <span>{resetSuccess}</span>
+              </div>
+            )}
 
+            {/* Emergency / Testing Recovery Code Display */}
+            {recoveryNotice && forgotStep === 2 && (
+              <div className="mb-5 p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs space-y-2 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-200">Security Verification Code:</span>
+                  <button
+                    type="button"
+                    onClick={() => setResetCode(recoveryNotice)}
+                    className="text-[11px] px-2 py-0.5 bg-sky-500/30 hover:bg-sky-500/40 border border-sky-400/40 rounded text-sky-200 font-bold"
+                  >
+                    Auto-fill Code
+                  </button>
+                </div>
+                <div className="font-mono text-base font-bold tracking-widest text-sky-400 bg-slate-950/60 p-2 rounded text-center border border-slate-800">
+                  {recoveryNotice}
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  A copy has also been sent to your email (<span className="text-white font-medium">{resetEmail}</span>). Valid for 15 minutes.
+                </p>
+              </div>
+            )}
 
-          {/* Customer Portal Shortcut */}
-          {onGoToTracker && (
-            <div className="mt-6 pt-5 border-t border-slate-800/50 text-center">
-              <p className="text-xs text-slate-400 mb-2">Are you a customer checking a computer in service?</p>
-              <button
-                type="button"
-                onClick={onGoToTracker}
-                className="text-xs font-semibold text-sky-400 hover:text-sky-300 hover:underline inline-flex items-center gap-1.5 transition-colors"
-              >
-                <SearchCheck className="w-3.5 h-3.5" />
-                <span>Track Repair Status with Ticket Number</span>
-              </button>
-            </div>
-          )}
-        </div>
+            {/* STEP 1: REQUEST VERIFICATION CODE */}
+            {forgotStep === 1 && (
+              <form onSubmit={handleRequestCode} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Gateway Administrator Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="email"
+                      required
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="nirmalaws10@gmail.com"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    We will send a 6-digit one-time verification code to this address.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="w-full py-2.5 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 active:scale-[0.99] transition-all shadow-lg shadow-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                >
+                  {resetLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Sending Code...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Send Verification Code</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-3 border-t border-slate-800/60 text-center">
+                  <button
+                    type="button"
+                    onClick={closeForgotPassword}
+                    className="text-xs text-slate-400 hover:text-white inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back to Sign In</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 2: ENTER VERIFICATION CODE */}
+            {forgotStep === 2 && (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Enter 6-Digit Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    autoFocus
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    className="w-full py-3 bg-slate-950/80 border-2 border-slate-700 focus:border-sky-500 rounded-xl text-center text-2xl font-mono tracking-widest text-sky-400 font-bold focus:outline-none transition-all"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-2 text-center">
+                    Check the inbox for <strong className="text-white">{resetEmail}</strong>
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetLoading || resetCode.length < 6}
+                  className="w-full py-2.5 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 active:scale-[0.99] transition-all shadow-lg shadow-sky-500/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                >
+                  {resetLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Verifying Code...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Verify Code</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800/60 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep(1)}
+                    className="text-slate-400 hover:text-white inline-flex items-center gap-1 transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Change Email</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRequestCode}
+                    disabled={resetLoading}
+                    className="text-sky-400 hover:text-sky-300 font-medium inline-flex items-center gap-1 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Resend Code</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: SET NEW PASSWORD */}
+            {forgotStep === 3 && (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className="w-full pl-10 pr-11 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Re-enter New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full pl-10 pr-11 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all text-sm font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="w-full py-2.5 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-[0.99] transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                >
+                  {resetLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Saving New Password...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Update Password & Sign In</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="pt-3 border-t border-slate-800/60 text-center">
+                  <button
+                    type="button"
+                    onClick={closeForgotPassword}
+                    className="text-xs text-slate-400 hover:text-white inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Footer */}

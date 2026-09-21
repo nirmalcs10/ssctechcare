@@ -274,8 +274,18 @@ export async function ensureD1Schema(db) {
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS master_password_resets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT NOT NULL,
+          code TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          used INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username));
         CREATE UNIQUE INDEX IF NOT EXISTS master_accounts_email_lower_idx ON master_accounts (LOWER(email));
+        CREATE INDEX IF NOT EXISTS master_password_resets_email_code_idx ON master_password_resets (LOWER(email), code);
 
         CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets (customer_id);
         CREATE INDEX IF NOT EXISTS tickets_technician_id_idx ON tickets (technician_id);
