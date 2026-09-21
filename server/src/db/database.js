@@ -409,6 +409,24 @@ const POSTGRES_SCHEMA = `
 
   CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username));
   CREATE UNIQUE INDEX IF NOT EXISTS master_accounts_email_lower_idx ON master_accounts (LOWER(email));
+
+  CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets (customer_id);
+  CREATE INDEX IF NOT EXISTS tickets_technician_id_idx ON tickets (technician_id);
+  CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets (status);
+  CREATE INDEX IF NOT EXISTS tickets_created_at_idx ON tickets (created_at DESC);
+  CREATE INDEX IF NOT EXISTS tickets_number_idx ON tickets (ticket_number);
+  CREATE INDEX IF NOT EXISTS ticket_parts_ticket_id_idx ON ticket_parts (ticket_id);
+  CREATE INDEX IF NOT EXISTS ticket_parts_inventory_id_idx ON ticket_parts (inventory_id);
+  CREATE INDEX IF NOT EXISTS timeline_logs_ticket_id_idx ON timeline_logs (ticket_id);
+  CREATE INDEX IF NOT EXISTS invoices_customer_id_idx ON invoices (customer_id);
+  CREATE INDEX IF NOT EXISTS invoices_ticket_id_idx ON invoices (ticket_id);
+  CREATE INDEX IF NOT EXISTS invoices_payment_status_idx ON invoices (payment_status);
+  CREATE INDEX IF NOT EXISTS invoices_created_at_idx ON invoices (created_at DESC);
+  CREATE INDEX IF NOT EXISTS inventory_category_idx ON inventory (category);
+  CREATE INDEX IF NOT EXISTS inventory_stock_idx ON inventory (stock_quantity);
+  CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers (phone);
+  CREATE INDEX IF NOT EXISTS user_sessions_token_idx ON user_sessions (token);
+  CREATE INDEX IF NOT EXISTS master_sessions_token_idx ON master_sessions (token);
 `;
 
 const SQLITE_SCHEMA = `
@@ -571,6 +589,24 @@ const SQLITE_SCHEMA = `
 
   CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username));
   CREATE UNIQUE INDEX IF NOT EXISTS master_accounts_email_lower_idx ON master_accounts (LOWER(email));
+
+  CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets (customer_id);
+  CREATE INDEX IF NOT EXISTS tickets_technician_id_idx ON tickets (technician_id);
+  CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets (status);
+  CREATE INDEX IF NOT EXISTS tickets_created_at_idx ON tickets (created_at DESC);
+  CREATE INDEX IF NOT EXISTS tickets_number_idx ON tickets (ticket_number);
+  CREATE INDEX IF NOT EXISTS ticket_parts_ticket_id_idx ON ticket_parts (ticket_id);
+  CREATE INDEX IF NOT EXISTS ticket_parts_inventory_id_idx ON ticket_parts (inventory_id);
+  CREATE INDEX IF NOT EXISTS timeline_logs_ticket_id_idx ON timeline_logs (ticket_id);
+  CREATE INDEX IF NOT EXISTS invoices_customer_id_idx ON invoices (customer_id);
+  CREATE INDEX IF NOT EXISTS invoices_ticket_id_idx ON invoices (ticket_id);
+  CREATE INDEX IF NOT EXISTS invoices_payment_status_idx ON invoices (payment_status);
+  CREATE INDEX IF NOT EXISTS invoices_created_at_idx ON invoices (created_at DESC);
+  CREATE INDEX IF NOT EXISTS inventory_category_idx ON inventory (category);
+  CREATE INDEX IF NOT EXISTS inventory_stock_idx ON inventory (stock_quantity);
+  CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers (phone);
+  CREATE INDEX IF NOT EXISTS user_sessions_token_idx ON user_sessions (token);
+  CREATE INDEX IF NOT EXISTS master_sessions_token_idx ON master_sessions (token);
 `;
 
 // Seed default rows if tables are empty
@@ -585,6 +621,29 @@ async function seedDefaults() {
       try { await run('ALTER TABLE users ADD COLUMN plain_password TEXT'); } catch (e) {}
       try { await run('ALTER TABLE inventory ADD COLUMN serial_no TEXT'); } catch (e) {}
       try { await run('ALTER TABLE ticket_parts ADD COLUMN serial_no TEXT'); } catch (e) {}
+    }
+
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets (customer_id)',
+      'CREATE INDEX IF NOT EXISTS tickets_technician_id_idx ON tickets (technician_id)',
+      'CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets (status)',
+      'CREATE INDEX IF NOT EXISTS tickets_created_at_idx ON tickets (created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS tickets_number_idx ON tickets (ticket_number)',
+      'CREATE INDEX IF NOT EXISTS ticket_parts_ticket_id_idx ON ticket_parts (ticket_id)',
+      'CREATE INDEX IF NOT EXISTS ticket_parts_inventory_id_idx ON ticket_parts (inventory_id)',
+      'CREATE INDEX IF NOT EXISTS timeline_logs_ticket_id_idx ON timeline_logs (ticket_id)',
+      'CREATE INDEX IF NOT EXISTS invoices_customer_id_idx ON invoices (customer_id)',
+      'CREATE INDEX IF NOT EXISTS invoices_ticket_id_idx ON invoices (ticket_id)',
+      'CREATE INDEX IF NOT EXISTS invoices_payment_status_idx ON invoices (payment_status)',
+      'CREATE INDEX IF NOT EXISTS invoices_created_at_idx ON invoices (created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS inventory_category_idx ON inventory (category)',
+      'CREATE INDEX IF NOT EXISTS inventory_stock_idx ON inventory (stock_quantity)',
+      'CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers (phone)',
+      'CREATE INDEX IF NOT EXISTS user_sessions_token_idx ON user_sessions (token)',
+      'CREATE INDEX IF NOT EXISTS master_sessions_token_idx ON master_sessions (token)'
+    ];
+    for (const sql of indexes) {
+      try { await run(sql); } catch (e) {}
     }
   } catch (migErr) {}
 

@@ -5,15 +5,12 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   PackageX, 
-  DollarSign, 
   ArrowUpRight, 
   ChevronRight,
   TrendingUp,
   Laptop,
   Cpu,
-  Boxes,
-  Plus,
-  Lock
+  Plus
 } from 'lucide-react';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
@@ -25,10 +22,6 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
-
-  useEffect(() => {
-    loadDashboard();
-  }, []);
 
   const loadDashboard = async () => {
     try {
@@ -54,6 +47,10 @@ export default function Dashboard({ onSelectTicket, onOpenNewTicket, onNavigate,
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
 
   if (loading) {
     return (

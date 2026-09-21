@@ -4,12 +4,7 @@ import {
   Search, 
   Plus, 
   Printer, 
-  CheckCircle, 
-  AlertCircle, 
-  DollarSign, 
-  CreditCard,
-  Eye,
-  X,
+  X, 
   TrendingUp
 } from 'lucide-react';
 import { api } from '../api';
@@ -45,52 +40,6 @@ export default function Invoices({
   const [payInvoice, setPayInvoice] = useState(null);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('Cash');
-
-  useEffect(() => {
-    loadInvoices();
-    loadTickets();
-  }, [selectedStatus, searchQuery]);
-
-  // Handle direct invoice settlement request
-  useEffect(() => {
-    if (preselectedInvoiceId && invoices.length > 0) {
-      const target = invoices.find(inv => String(inv.id) === String(preselectedInvoiceId));
-      if (target) {
-        setPayInvoice(target);
-        setPayAmount(String(target.balance_due || ''));
-        setIsPayOpen(true);
-        if (onClearPreselect) onClearPreselect();
-      }
-    }
-  }, [preselectedInvoiceId, invoices]);
-
-  // Handle direct ticket billing request
-  useEffect(() => {
-    if (preselectedTicketId && invoices.length > 0) {
-      const existing = invoices.find(inv => String(inv.ticket_id) === String(preselectedTicketId));
-      if (existing) {
-        if (Number(existing.balance_due) > 0) {
-          setPayInvoice(existing);
-          setPayAmount(String(existing.balance_due));
-          setIsPayOpen(true);
-        } else {
-          onPrintInvoice(existing.id);
-        }
-      } else {
-        setSelectedTicketId(preselectedTicketId);
-        setIsCreateOpen(true);
-      }
-      if (onClearPreselect) onClearPreselect();
-    }
-  }, [preselectedTicketId, invoices]);
-
-  useEffect(() => {
-    if (selectedTicketId) {
-      loadTicketForInvoice(selectedTicketId);
-    } else {
-      setTicketDetails(null);
-    }
-  }, [selectedTicketId]);
 
   const loadInvoices = async () => {
     try {
@@ -129,6 +78,52 @@ export default function Invoices({
       console.error('Failed to load ticket details:', err);
     }
   };
+
+  useEffect(() => {
+    loadInvoices();
+    loadTickets();
+  }, [selectedStatus, searchQuery]);
+
+  // Handle direct invoice settlement request
+  useEffect(() => {
+    if (preselectedInvoiceId && invoices.length > 0) {
+      const target = invoices.find(inv => String(inv.id) === String(preselectedInvoiceId));
+      if (target) {
+        setPayInvoice(target);
+        setPayAmount(String(target.balance_due || ''));
+        setIsPayOpen(true);
+        if (onClearPreselect) onClearPreselect();
+      }
+    }
+  }, [preselectedInvoiceId, invoices, onClearPreselect]);
+
+  // Handle direct ticket billing request
+  useEffect(() => {
+    if (preselectedTicketId && invoices.length > 0) {
+      const existing = invoices.find(inv => String(inv.ticket_id) === String(preselectedTicketId));
+      if (existing) {
+        if (Number(existing.balance_due) > 0) {
+          setPayInvoice(existing);
+          setPayAmount(String(existing.balance_due));
+          setIsPayOpen(true);
+        } else if (onPrintInvoice) {
+          onPrintInvoice(existing.id);
+        }
+      } else {
+        setSelectedTicketId(preselectedTicketId);
+        setIsCreateOpen(true);
+      }
+      if (onClearPreselect) onClearPreselect();
+    }
+  }, [preselectedTicketId, invoices, onClearPreselect, onPrintInvoice]);
+
+  useEffect(() => {
+    if (selectedTicketId) {
+      loadTicketForInvoice(selectedTicketId);
+    } else {
+      setTicketDetails(null);
+    }
+  }, [selectedTicketId]);
 
   const handleCreateInvoice = async (e) => {
     e.preventDefault();
@@ -496,6 +491,17 @@ export default function Invoices({
                     <option value="Bank Transfer">Bank Transfer</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Invoice Notes / Warranty Terms</label>
+                <input
+                  type="text"
+                  value={invoiceNotes}
+                  onChange={e => setInvoiceNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                  placeholder="30-day hardware service warranty"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">

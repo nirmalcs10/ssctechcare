@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, X, Wrench, Shield, CheckCircle } from 'lucide-react';
+import { Printer, X, Wrench } from 'lucide-react';
 
 export default function PrintJobCard({ ticket, shopSettings = {}, onClose }) {
   if (!ticket) return null;

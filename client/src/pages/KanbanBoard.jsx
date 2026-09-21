@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
-  Search, 
   ChevronRight, 
   ChevronLeft, 
-  AlertCircle, 
-  Clock, 
-  User, 
-  Laptop, 
-  CheckCircle2,
   RefreshCw,
   Truck
 } from 'lucide-react';
@@ -30,10 +24,6 @@ export default function KanbanBoard({ onSelectTicket, onOpenNewTicket }) {
   const [selectedTech, setSelectedTech] = useState('ALL');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     try {
       setLoading(true);
@@ -49,6 +39,10 @@ export default function KanbanBoard({ onSelectTicket, onOpenNewTicket }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const handleMoveStatus = async (ticketId, currentStatus, direction) => {
     const colIds = KANBAN_COLUMNS.map(c => c.id);
@@ -99,12 +93,23 @@ export default function KanbanBoard({ onSelectTicket, onOpenNewTicket }) {
             })}
           </select>
 
+          {onOpenNewTicket && (
+            <button
+              onClick={onOpenNewTicket}
+              className="flex items-center gap-1.5 px-3 py-2 bg-sky-500 hover:bg-sky-400 text-white rounded-xl text-xs font-semibold shadow-md shadow-sky-500/20 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Ticket</span>
+            </button>
+          )}
+
           <button
             onClick={loadData}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors"
+            disabled={loading}
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors disabled:opacity-50"
             title="Refresh Board"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-sky-400' : ''}`} />
           </button>
         </div>
       </div>

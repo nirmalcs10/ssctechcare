@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, MapPin, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, User, AlertCircle } from 'lucide-react';
 import { api } from '../api';
 
 export default function EditCustomerModal({ isOpen, customer, onClose, onSuccess }) {

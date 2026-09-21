@@ -92,7 +92,7 @@ export function formatDateTime(val, includeSeconds = false) {
 export function getSystemTimezone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'System Local';
-  } catch (e) {
+  } catch {
     return 'System Local';
   }
 }

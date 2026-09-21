@@ -3,14 +3,10 @@ import {
   Boxes, 
   Plus, 
   Search, 
-  Filter, 
   AlertTriangle, 
-  TrendingUp, 
-  TrendingDown, 
   Edit, 
   Trash2, 
-  X,
-  PackageCheck
+  X 
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -88,14 +84,6 @@ export default function Inventory() {
     }
   };
 
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  useEffect(() => {
-    loadInventory();
-  }, [selectedCat, showLowStockOnly, searchQuery]);
-
   const loadCategories = async () => {
     try {
       const cats = await api.getCategories();
@@ -121,6 +109,14 @@ export default function Inventory() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    loadInventory();
+  }, [selectedCat, showLowStockOnly, searchQuery]);
 
   const duplicateNames = (() => {
     const seen = new Set();

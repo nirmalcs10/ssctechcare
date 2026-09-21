@@ -6,16 +6,23 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // Standard CORS headers helper
+    // Standard CORS and Security headers helper
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Master-Token'
     };
 
+    const securityHeaders = {
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+    };
+
     // Handle CORS preflight OPTIONS requests
     if (request.method.toUpperCase() === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders });
+      return new Response(null, { status: 204, headers: { ...corsHeaders, ...securityHeaders } });
     }
 
     // 1. Intercept all /api/* requests
@@ -26,7 +33,7 @@ export default {
             error: "Cloudflare D1 binding 'DB' is missing. Please add the D1 database binding named 'DB' in Cloudflare Settings ➔ Bindings."
           },
           500,
-          corsHeaders
+          { ...corsHeaders, ...securityHeaders }
         );
       }
 
@@ -37,9 +44,9 @@ export default {
         // Execute API route
         const response = await handleApiRequest(request, env);
 
-        // Append CORS headers to response
+        // Append CORS & security headers to response
         const newHeaders = new Headers(response.headers);
-        Object.entries(corsHeaders).forEach(([k, v]) => newHeaders.set(k, v));
+        Object.entries({ ...corsHeaders, ...securityHeaders }).forEach(([k, v]) => newHeaders.set(k, v));
 
         return new Response(response.body, {
           status: response.status,
@@ -48,15 +55,22 @@ export default {
         });
       } catch (apiErr) {
         console.error('API Handler Error:', apiErr);
-        return json({ error: apiErr.message || 'Internal Server Error' }, 500, corsHeaders);
+        return json({ error: apiErr.message || 'Internal Server Error' }, 500, { ...corsHeaders, ...securityHeaders });
       }
     }
 
     // 2. Fall back to static assets for frontend (React Single Page App)
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const assetRes = await env.ASSETS.fetch(request);
+      const assetHeaders = new Headers(assetRes.headers);
+      Object.entries(securityHeaders).forEach(([k, v]) => assetHeaders.set(k, v));
+      return new Response(assetRes.body, {
+        status: assetRes.status,
+        statusText: assetRes.statusText,
+        headers: assetHeaders
+      });
     }
 
-    return new Response('SSC TechCare Worker Active', { status: 200 });
+    return new Response('SSC TechCare Worker Active', { status: 200, headers: securityHeaders });
   }
 };

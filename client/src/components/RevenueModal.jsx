@@ -13,12 +13,8 @@ import {
   CreditCard, 
   ArrowUpRight,
   Package,
-  Calendar,
-  Layers,
-  ChevronRight,
   ShieldAlert,
   CheckCircle2,
-  Wrench,
   Users
 } from 'lucide-react';
 import { api } from '../api';
@@ -30,12 +26,6 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
   const [customerSearch, setCustomerSearch] = useState('');
   const [activeView, setActiveView] = useState('dues'); // 'dues' | 'profit' | 'inventory'
   const [dueFilter, setDueFilter] = useState('pending'); // 'pending' | 'all'
-
-  useEffect(() => {
-    if (isOpen) {
-      loadAnalytics();
-    }
-  }, [isOpen]);
 
   const fetchFallbackAnalytics = async () => {
     const [invoices, inventory, tickets, customers] = await Promise.all([
@@ -262,6 +252,12 @@ export default function RevenueModal({ isOpen, onClose, onNavigate, onSettleInvo
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadAnalytics();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

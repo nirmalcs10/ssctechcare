@@ -22,7 +22,6 @@ import {
   Layers,
   Check,
   Calendar,
-  Laptop,
   Eye,
   EyeOff
 } from 'lucide-react';
@@ -97,16 +96,6 @@ export default function Settings({ currentUser }) {
     }
   });
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
-  useEffect(() => {
-    if ((activeTab === 'identity' || activeTab === 'backup') && currentUser?.role !== 'admin') {
-      setActiveTab('account');
-    }
-  }, [currentUser, activeTab]);
-
   const loadAllData = async () => {
     setLoading(true);
     try {
@@ -127,6 +116,16 @@ export default function Settings({ currentUser }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  useEffect(() => {
+    if ((activeTab === 'identity' || activeTab === 'backup') && currentUser?.role !== 'admin') {
+      setActiveTab('account');
+    }
+  }, [currentUser, activeTab]);
 
   const showToast = (msg) => {
     setSavedSuccess(msg);
@@ -305,7 +304,7 @@ export default function Settings({ currentUser }) {
       } else {
         showToast(`Computer Clock Active: ${clock.fullString}`);
       }
-    } catch (e) {
+    } catch {
       showError('Could not verify clock sync with server');
     } finally {
       setSyncVerifying(false);

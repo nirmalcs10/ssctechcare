@@ -276,6 +276,24 @@ export async function ensureD1Schema(db) {
 
         CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username));
         CREATE UNIQUE INDEX IF NOT EXISTS master_accounts_email_lower_idx ON master_accounts (LOWER(email));
+
+        CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets (customer_id);
+        CREATE INDEX IF NOT EXISTS tickets_technician_id_idx ON tickets (technician_id);
+        CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets (status);
+        CREATE INDEX IF NOT EXISTS tickets_created_at_idx ON tickets (created_at DESC);
+        CREATE INDEX IF NOT EXISTS tickets_number_idx ON tickets (ticket_number);
+        CREATE INDEX IF NOT EXISTS ticket_parts_ticket_id_idx ON ticket_parts (ticket_id);
+        CREATE INDEX IF NOT EXISTS ticket_parts_inventory_id_idx ON ticket_parts (inventory_id);
+        CREATE INDEX IF NOT EXISTS timeline_logs_ticket_id_idx ON timeline_logs (ticket_id);
+        CREATE INDEX IF NOT EXISTS invoices_customer_id_idx ON invoices (customer_id);
+        CREATE INDEX IF NOT EXISTS invoices_ticket_id_idx ON invoices (ticket_id);
+        CREATE INDEX IF NOT EXISTS invoices_payment_status_idx ON invoices (payment_status);
+        CREATE INDEX IF NOT EXISTS invoices_created_at_idx ON invoices (created_at DESC);
+        CREATE INDEX IF NOT EXISTS inventory_category_idx ON inventory (category);
+        CREATE INDEX IF NOT EXISTS inventory_stock_idx ON inventory (stock_quantity);
+        CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers (phone);
+        CREATE INDEX IF NOT EXISTS user_sessions_token_idx ON user_sessions (token);
+        CREATE INDEX IF NOT EXISTS master_sessions_token_idx ON master_sessions (token);
       `);
 
       // Seed Default Settings
@@ -340,6 +358,32 @@ export async function ensureD1Schema(db) {
         (5, 'DISP-156-FHD', '15.6" Slim 30-Pin FHD (1920x1080) IPS Matte Screen', 'Display', 'Dell, HP, Lenovo, Asus 15.6"', 3800, 5500, 4, 2, 'Rack Display-1')
       `);
     }
+
+    // Ensure all critical performance indexes exist on active tables
+    try {
+      await db.exec(`
+        CREATE INDEX IF NOT EXISTS tickets_customer_id_idx ON tickets (customer_id);
+        CREATE INDEX IF NOT EXISTS tickets_technician_id_idx ON tickets (technician_id);
+        CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets (status);
+        CREATE INDEX IF NOT EXISTS tickets_created_at_idx ON tickets (created_at DESC);
+        CREATE INDEX IF NOT EXISTS tickets_number_idx ON tickets (ticket_number);
+        CREATE INDEX IF NOT EXISTS ticket_parts_ticket_id_idx ON ticket_parts (ticket_id);
+        CREATE INDEX IF NOT EXISTS ticket_parts_inventory_id_idx ON ticket_parts (inventory_id);
+        CREATE INDEX IF NOT EXISTS timeline_logs_ticket_id_idx ON timeline_logs (ticket_id);
+        CREATE INDEX IF NOT EXISTS invoices_customer_id_idx ON invoices (customer_id);
+        CREATE INDEX IF NOT EXISTS invoices_ticket_id_idx ON invoices (ticket_id);
+        CREATE INDEX IF NOT EXISTS invoices_payment_status_idx ON invoices (payment_status);
+        CREATE INDEX IF NOT EXISTS invoices_created_at_idx ON invoices (created_at DESC);
+        CREATE INDEX IF NOT EXISTS inventory_category_idx ON inventory (category);
+        CREATE INDEX IF NOT EXISTS inventory_stock_idx ON inventory (stock_quantity);
+        CREATE INDEX IF NOT EXISTS customers_phone_idx ON customers (phone);
+        CREATE INDEX IF NOT EXISTS user_sessions_token_idx ON user_sessions (token);
+        CREATE INDEX IF NOT EXISTS master_sessions_token_idx ON master_sessions (token);
+      `);
+    } catch (idxErr) {
+      console.warn('Note: Could not ensure some D1 indexes:', idxErr?.message);
+    }
+
     schemaInitialized = true;
   } catch (err) {
     console.error('Error ensuring D1 schema:', err);

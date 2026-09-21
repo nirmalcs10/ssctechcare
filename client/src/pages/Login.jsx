@@ -12,7 +12,7 @@ import {
   Cpu
 } from 'lucide-react';
 
-export default function Login({ onLoginSuccess, onGoToTracker, onMasterLogout, masterUser }) {
+export default function Login({ onLoginSuccess, onMasterLogout, masterUser }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

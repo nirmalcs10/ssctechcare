@@ -6,22 +6,15 @@ import {
   Phone, 
   Mail, 
   MapPin, 
-  Laptop, 
-  Key, 
   Eye, 
   EyeOff, 
-  Wrench, 
-  CheckCircle, 
   Plus, 
   Trash2, 
   Send, 
   Clock, 
   AlertCircle,
-  Calendar,
-  DollarSign,
   Package,
   Activity,
-  Cpu,
   Edit,
   X,
   Truck,
@@ -85,17 +78,30 @@ export default function TicketDetail({
   const [deliveryMarkDelivered, setDeliveryMarkDelivered] = useState(true);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
 
-  useEffect(() => {
-    loadTicketData();
-    loadAuxData();
-  }, [ticketId]);
-
-  useEffect(() => {
-    if (initialAction === 'deliver' && ticket) {
-      handleOpenDelivery();
-      if (onClearAction) onClearAction();
+  const loadTicketData = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getTicket(ticketId);
+      setTicket(data);
+    } catch (err) {
+      console.error('Failed to load ticket:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [initialAction, ticket]);
+  };
+
+  const loadAuxData = async () => {
+    try {
+      const [techs, inv] = await Promise.all([
+        api.getTechnicians(),
+        api.getInventory()
+      ]);
+      setTechnicians(techs);
+      setInventoryList(inv);
+    } catch (err) {
+      console.error('Failed to load aux data:', err);
+    }
+  };
 
   const handleOpenDelivery = () => {
     if (ticket?.invoice) {
@@ -172,30 +178,17 @@ export default function TicketDetail({
     }
   };
 
-  const loadTicketData = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getTicket(ticketId);
-      setTicket(data);
-    } catch (err) {
-      console.error('Failed to load ticket:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    loadTicketData();
+    loadAuxData();
+  }, [ticketId]);
 
-  const loadAuxData = async () => {
-    try {
-      const [techs, inv] = await Promise.all([
-        api.getTechnicians(),
-        api.getInventory()
-      ]);
-      setTechnicians(techs);
-      setInventoryList(inv);
-    } catch (err) {
-      console.error('Failed to load aux data:', err);
+  useEffect(() => {
+    if (initialAction === 'deliver' && ticket) {
+      handleOpenDelivery();
+      if (onClearAction) onClearAction();
     }
-  };
+  }, [initialAction, ticket]);
 
   const handleStatusChange = async (newStatus) => {
     try {
@@ -418,7 +411,7 @@ export default function TicketDetail({
           Repair Stage Progression
         </label>
         <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-          {WORKFLOW_STEPS.map((st, idx) => {
+          {WORKFLOW_STEPS.map((st) => {
             const isCurrent = ticket.status === st;
             return (
               <button

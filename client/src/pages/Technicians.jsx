@@ -4,17 +4,14 @@ import {
   Plus, 
   Phone, 
   Mail, 
-  Wrench, 
   CheckCircle2, 
-  Clock, 
-  Cpu,
-  X,
-  Pencil,
-  Trash2,
-  AlertTriangle,
-  RefreshCw,
-  ExternalLink,
-  Search
+  X, 
+  Pencil, 
+  Trash2, 
+  AlertTriangle, 
+  RefreshCw, 
+  ExternalLink, 
+  Search 
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -41,10 +38,6 @@ export default function Technicians({ onSelectTicket }) {
     status: 'Active'
   });
 
-  useEffect(() => {
-    loadTechs();
-  }, []);
-
   const showFeedback = (message, type = 'success') => {
     setFeedback({ message, type });
     setTimeout(() => {
@@ -64,6 +57,10 @@ export default function Technicians({ onSelectTicket }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadTechs();
+  }, []);
 
   const handleAddTechnician = async (e) => {
     e.preventDefault();

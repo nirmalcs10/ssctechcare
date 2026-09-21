@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
 import { 
   Search, 
-  Wrench, 
   CheckCircle2, 
   Clock, 
   Phone, 
-  MapPin, 
-  Laptop, 
   ShieldCheck, 
-  AlertCircle,
-  PackageCheck
+  AlertCircle, 
+  PackageCheck 
 } from 'lucide-react';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
@@ -160,7 +157,7 @@ export default function PublicTrack({ onBackToLogin, isLoggedIn }) {
               Repair Progress Milestones
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-              {STAGE_MILESTONES.map((m, idx) => {
+              {STAGE_MILESTONES.map((m) => {
                 const done = isStageDone(m.id);
                 const isCurrent = currentStatus === m.id;
                 return (

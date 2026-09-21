@@ -2,24 +2,26 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 
-// Helper to generate next ticket number: REP-2026-000X
-async function getNextTicketNumber() {
+// Helper to generate next ticket number: REP-YYYY-000X
+async function getNextTicketNumber(attempt = 0) {
+  const year = new Date().getFullYear();
+  const prefix = `REP-${year}-`;
   const row = await db.prepare(`
     SELECT ticket_number FROM tickets 
+    WHERE ticket_number LIKE ?
     ORDER BY id DESC LIMIT 1
-  `).get();
+  `).get(`${prefix}%`);
 
-  const year = new Date().getFullYear();
-  if (!row) {
-    return `REP-${year}-0001`;
+  if (!row || !row.ticket_number) {
+    return `${prefix}${String(1 + attempt).padStart(4, '0')}`;
   }
 
-  const match = row.ticket_number.match(/REP-(\d+)-(\d+)/);
+  const match = row.ticket_number.match(/REP-\d+-(\d+)/);
   if (match) {
-    const nextNum = parseInt(match[2], 10) + 1;
-    return `REP-${year}-${String(nextNum).padStart(4, '0')}`;
+    const nextNum = parseInt(match[1], 10) + 1 + attempt;
+    return `${prefix}${String(nextNum).padStart(4, '0')}`;
   }
-  return `REP-${year}-${Date.now().toString().slice(-4)}`;
+  return `${prefix}${String(1 + attempt).padStart(4, '0')}`;
 }
 
 // GET all tickets with filtering & search

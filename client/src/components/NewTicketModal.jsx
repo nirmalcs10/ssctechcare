@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wrench, User, Laptop, CheckSquare, Shield, DollarSign, Calendar, AlertTriangle, RotateCcw } from 'lucide-react';
+import { X, Wrench, User, Laptop, Shield, AlertTriangle, RotateCcw } from 'lucide-react';
 import { api } from '../api';
 import { formatLocalDate } from '../utils/date';
 
@@ -146,14 +146,6 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
     setError('');
   };
 
-  // Clear and reset form every time the modal is opened
-  useEffect(() => {
-    if (isOpen) {
-      resetForm();
-      loadTechs();
-    }
-  }, [isOpen]);
-
   const loadTechs = async () => {
     try {
       const data = await api.getTechnicians();
@@ -168,6 +160,14 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
       console.error('Failed to load technicians', err);
     }
   };
+
+  // Clear and reset form every time the modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      resetForm();
+      loadTechs();
+    }
+  }, [isOpen]);
 
   const handleClose = () => {
     resetForm();
@@ -188,7 +188,7 @@ export default function NewTicketModal({ isOpen, onClose, onSuccess }) {
             customer_address: match.address || ''
           }));
         }
-      } catch (e) {
+      } catch {
         // ignore lookup errors
       }
     }

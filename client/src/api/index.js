@@ -109,7 +109,7 @@ async function request(endpoint, options = {}) {
       ...options,
       headers
     });
-  } catch (netErr) {
+  } catch {
     // If running in development (e.g. port 5173) and Vite proxy fails, try direct backend on 5000
     const fallbackUrl = getFallbackUrl(endpoint);
     if (fallbackUrl) {
@@ -118,7 +118,7 @@ async function request(endpoint, options = {}) {
           ...options,
           headers
         });
-      } catch (fallbackErr) {
+      } catch {
         throw new Error('Unable to connect to SSC TechCare server. Please visit http://localhost:5000 or ensure the backend server is running.');
       }
     } else {
@@ -166,7 +166,7 @@ export const api = {
   masterLogout: async () => {
     try {
       await request('/auth/master-logout', { method: 'POST' });
-    } catch (e) {
+    } catch {
       // Continue client cleanup regardless
     }
     clearMasterToken();
@@ -194,7 +194,7 @@ export const api = {
   logout: async () => {
     try {
       await request('/auth/logout', { method: 'POST' });
-    } catch (e) {
+    } catch {
       // Continue client cleanup regardless
     }
     clearAuthToken();

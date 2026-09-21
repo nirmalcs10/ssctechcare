@@ -2,18 +2,19 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 
-// Helper to generate next invoice number: INV-2026-000X
-async function getNextInvoiceNumber() {
-  const row = await db.prepare('SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1').get();
+// Helper to generate next invoice number: INV-YYYY-000X
+async function getNextInvoiceNumber(attempt = 0) {
   const year = new Date().getFullYear();
-  if (!row) return `INV-${year}-0001`;
+  const prefix = `INV-${year}-`;
+  const row = await db.prepare('SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY id DESC LIMIT 1').get(`${prefix}%`);
+  if (!row || !row.invoice_number) return `${prefix}${String(1 + attempt).padStart(4, '0')}`;
 
-  const match = row.invoice_number.match(/INV-(\d+)-(\d+)/);
+  const match = row.invoice_number.match(/INV-\d+-(\d+)/);
   if (match) {
-    const nextNum = parseInt(match[2], 10) + 1;
-    return `INV-${year}-${String(nextNum).padStart(4, '0')}`;
+    const nextNum = parseInt(match[1], 10) + 1 + attempt;
+    return `${prefix}${String(nextNum).padStart(4, '0')}`;
   }
-  return `INV-${year}-${Date.now().toString().slice(-4)}`;
+  return `${prefix}${String(1 + attempt).padStart(4, '0')}`;
 }
 
 // GET all invoices

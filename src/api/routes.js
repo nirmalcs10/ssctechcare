@@ -79,41 +79,51 @@ async function getAuthContext(request, db) {
 }
 
 // Generate sequential ticket number (REP-YYYY-000X)
-async function generateTicketNumber(db) {
+async function generateTicketNumber(db, attempt = 0) {
   const year = new Date().getFullYear();
+  const prefix = `REP-${year}-`;
   const lastTicket = await d1.get(
     db,
-    `SELECT ticket_number FROM tickets ORDER BY id DESC LIMIT 1`
+    `SELECT ticket_number FROM tickets WHERE ticket_number LIKE ? ORDER BY id DESC LIMIT 1`,
+    `${prefix}%`
   );
-  if (!lastTicket) return `REP-${year}-0001`;
-
-  const match = lastTicket.ticket_number?.match(/REP-(\d+)-(\d+)/);
-  if (match) {
-    const nextNum = parseInt(match[2], 10) + 1;
-    return `REP-${year}-${String(nextNum).padStart(4, '0')}`;
+  if (!lastTicket || !lastTicket.ticket_number) {
+    return `${prefix}${String(1 + attempt).padStart(4, '0')}`;
   }
-  const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM tickets');
-  const nextNum = (countRow?.count || 0) + 1;
-  return `REP-${year}-${String(nextNum).padStart(4, '0')}`;
+
+  const match = lastTicket.ticket_number.match(/REP-\d+-(\d+)/);
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1 + attempt;
+    return `${prefix}${String(nextNum).padStart(4, '0')}`;
+  }
+
+  const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM tickets WHERE ticket_number LIKE ?', `${prefix}%`);
+  const nextNum = (countRow?.count || 0) + 1 + attempt;
+  return `${prefix}${String(nextNum).padStart(4, '0')}`;
 }
 
 // Generate sequential invoice number (INV-YYYY-000X)
-async function generateInvoiceNumber(db) {
+async function generateInvoiceNumber(db, attempt = 0) {
   const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
   const lastInv = await d1.get(
     db,
-    `SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1`
+    `SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY id DESC LIMIT 1`,
+    `${prefix}%`
   );
-  if (!lastInv) return `INV-${year}-0001`;
-
-  const match = lastInv.invoice_number?.match(/INV-(\d+)-(\d+)/);
-  if (match) {
-    const nextNum = parseInt(match[2], 10) + 1;
-    return `INV-${year}-${String(nextNum).padStart(4, '0')}`;
+  if (!lastInv || !lastInv.invoice_number) {
+    return `${prefix}${String(1 + attempt).padStart(4, '0')}`;
   }
-  const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM invoices');
-  const nextNum = (countRow?.count || 0) + 1;
-  return `INV-${year}-${String(nextNum).padStart(4, '0')}`;
+
+  const match = lastInv.invoice_number.match(/INV-\d+-(\d+)/);
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1 + attempt;
+    return `${prefix}${String(nextNum).padStart(4, '0')}`;
+  }
+
+  const countRow = await d1.get(db, 'SELECT COUNT(*) as count FROM invoices WHERE invoice_number LIKE ?', `${prefix}%`);
+  const nextNum = (countRow?.count || 0) + 1 + attempt;
+  return `${prefix}${String(nextNum).padStart(4, '0')}`;
 }
 
 export async function handleApiRequest(request, env) {

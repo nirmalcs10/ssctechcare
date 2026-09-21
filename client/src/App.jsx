@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, Ticket, Kanban, Boxes, Receipt, Menu } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import NewTicketModal from './components/NewTicketModal';
@@ -18,7 +19,6 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import MainLogin from './pages/MainLogin';
 
-import { Wrench, LayoutDashboard, Ticket, Kanban, Receipt, Menu, Boxes } from 'lucide-react';
 import { api } from './api';
 import { applyAppearance } from './utils/theme';
 

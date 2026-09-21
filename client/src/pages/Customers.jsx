@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, 
   Search, 
   Plus, 
   Phone, 
@@ -8,14 +7,12 @@ import {
   MapPin, 
   Laptop, 
   Receipt, 
-  ChevronRight,
-  Edit,
-  Trash2,
-  AlertTriangle,
-  CreditCard,
-  CheckCircle2,
-  AlertCircle,
-  X
+  Edit, 
+  Trash2, 
+  AlertTriangle, 
+  CreditCard, 
+  CheckCircle2, 
+  X 
 } from 'lucide-react';
 import { api } from '../api';
 import EditCustomerModal from '../components/EditCustomerModal';
@@ -41,10 +38,6 @@ export default function Customers({ onSelectTicket, onNavigate }) {
     notes: ''
   });
 
-  useEffect(() => {
-    loadCustomers();
-  }, [searchQuery]);
-
   const loadCustomers = async () => {
     try {
       setLoading(true);
@@ -56,6 +49,10 @@ export default function Customers({ onSelectTicket, onNavigate }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadCustomers();
+  }, [searchQuery]);
 
   const handleSelectCustomer = async (id) => {
     try {
