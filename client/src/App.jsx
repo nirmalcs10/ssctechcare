@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Ticket, Kanban, Boxes, Receipt, Menu } from 'lucide-react';
+import { LayoutDashboard, Ticket, Kanban, Boxes, Receipt, Menu, Wrench } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import NewTicketModal from './components/NewTicketModal';
