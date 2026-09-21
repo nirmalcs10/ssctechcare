@@ -1607,6 +1607,13 @@ export async function handleApiRequest(request, env) {
       } catch {
         return err('Invalid JSON backup file', 400);
       }
+    } else if (!backupData || Object.keys(backupData).length === 0) {
+      try {
+        const raw = await request.text();
+        if (raw) backupData = JSON.parse(raw);
+      } catch {
+        return err('Invalid JSON backup file format', 400);
+      }
     }
     if (!backupData?.tables) return err('Backup file does not contain valid table data', 400);
 
@@ -1715,7 +1722,43 @@ export async function handleApiRequest(request, env) {
       );
     }
 
-    return json({ success: true, message: 'Database restored successfully from backup' });
+    // Restore users (preserve existing active admin, insert any missing)
+    if (Array.isArray(tables.users)) {
+      for (const u of tables.users) {
+        await d1.run(
+          db,
+          `INSERT OR IGNORE INTO users (id, username, password_hash, salt, plain_password, full_name, role, is_active, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          u.id, u.username, u.password_hash, u.salt, u.plain_password || null, u.full_name, u.role || 'admin', u.is_active || 1, u.created_at || new Date().toISOString()
+        );
+      }
+    }
+
+    // Restore master accounts
+    if (Array.isArray(tables.master_accounts)) {
+      for (const m of tables.master_accounts) {
+        await d1.run(
+          db,
+          `INSERT OR IGNORE INTO master_accounts (id, email, password_hash, salt, display_name, is_active, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          m.id, m.email, m.password_hash, m.salt, m.display_name || 'Master Admin', m.is_active || 1, m.created_at || new Date().toISOString()
+        );
+      }
+    }
+
+    const tCount = await d1.get(db, 'SELECT COUNT(*) as c FROM tickets');
+    const cCount = await d1.get(db, 'SELECT COUNT(*) as c FROM customers');
+    const invCount = await d1.get(db, 'SELECT COUNT(*) as c FROM invoices');
+
+    return json({
+      success: true,
+      message: `Database restored successfully from backup! Loaded ${tCount?.c || 0} tickets, ${cCount?.c || 0} customers, and ${invCount?.c || 0} invoices.`,
+      restoredRecords: {
+        tickets: tCount?.c || 0,
+        customers: cCount?.c || 0,
+        invoices: invCount?.c || 0
+      }
+    });
   }
 
   // -------------------------------------------------------------

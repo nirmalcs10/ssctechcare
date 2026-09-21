@@ -157,9 +157,10 @@ router.post('/restore', requireRole('admin'), express.raw({ type: '*/*', limit: 
       return res.status(400).json({ error: `Uploaded backup is missing required tables: ${missing.join(', ')}` });
     }
 
+    const isPostgres = db.getEngine && db.getEngine() === 'postgres';
     await db.transaction(async (tx) => {
-      // Disable triggers/foreign key checks temporarily if needed, or truncate in reverse dependency order
-      const truncateOrder = [
+      // Clear in reverse dependency order
+      const clearOrder = [
         'timeline_logs',
         'ticket_parts',
         'invoices',
@@ -170,8 +171,12 @@ router.post('/restore', requireRole('admin'), express.raw({ type: '*/*', limit: 
         'settings'
       ];
 
-      for (const t of truncateOrder) {
-        await tx.query(`TRUNCATE TABLE ${t} CASCADE`);
+      for (const t of clearOrder) {
+        if (isPostgres) {
+          await tx.query(`TRUNCATE TABLE ${t} CASCADE`);
+        } else {
+          await tx.prepare(`DELETE FROM ${t}`).run();
+        }
       }
 
       // Restore settings
@@ -273,10 +278,12 @@ router.post('/restore', requireRole('admin'), express.raw({ type: '*/*', limit: 
         }
       }
 
-      // Sync serial ID sequences to maximum ID + 1
-      const tablesWithSerial = ['settings', 'customers', 'technicians', 'inventory', 'tickets', 'ticket_parts', 'timeline_logs', 'invoices'];
-      for (const t of tablesWithSerial) {
-        await tx.query(`SELECT setval(pg_get_serial_sequence('${t}', 'id'), COALESCE(MAX(id), 1)) FROM ${t}`);
+      // Sync serial ID sequences to maximum ID + 1 (PostgreSQL only)
+      if (isPostgres) {
+        const tablesWithSerial = ['settings', 'customers', 'technicians', 'inventory', 'tickets', 'ticket_parts', 'timeline_logs', 'invoices'];
+        for (const t of tablesWithSerial) {
+          await tx.query(`SELECT setval(pg_get_serial_sequence('${t}', 'id'), COALESCE(MAX(id), 1)) FROM ${t}`);
+        }
       }
     });
 

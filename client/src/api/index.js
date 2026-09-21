@@ -471,15 +471,34 @@ export const api = {
   restoreBackup: async (file) => {
     const token = getAuthToken();
     const masterToken = getMasterToken();
-    const arrayBuffer = await file.arrayBuffer();
+
+    let bodyPayload;
+    let contentType = 'application/json';
+
+    if (file.name.endsWith('.json')) {
+      const text = await file.text();
+      try {
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== 'object' || !parsed.tables) {
+          throw new Error('Invalid snapshot file: missing database tables data.');
+        }
+      } catch (err) {
+        throw new Error('Invalid JSON file: ' + err.message);
+      }
+      bodyPayload = text;
+    } else {
+      bodyPayload = await file.arrayBuffer();
+      contentType = 'application/octet-stream';
+    }
+
     const res = await fetch(`${API_BASE}/settings/restore`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/octet-stream',
+        'Content-Type': contentType,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...(masterToken ? { 'X-Master-Token': masterToken } : {})
       },
-      body: arrayBuffer
+      body: bodyPayload
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -229,9 +229,9 @@ export default function Settings({ currentUser }) {
     setBackupLoading(true);
     try {
       await api.downloadBackup();
-      showToast('Database backup (.json) successfully downloaded!');
+      showToast('Database snapshot (.json) successfully downloaded!');
     } catch (err) {
-      showError(err.message || 'Failed to download backup');
+      showError(err.message || 'Failed to download backup snapshot');
     } finally {
       setBackupLoading(false);
     }
@@ -240,12 +240,19 @@ export default function Settings({ currentUser }) {
   const handleRestoreFileSelected = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.endsWith('.json') && !file.name.endsWith('.db') && !file.name.endsWith('.sqlite')) {
-      showError('Please select a valid database backup file (.json)');
+    if (file.name.endsWith('.db') || file.name.endsWith('.sqlite')) {
+      showError('Please select the .json snapshot file (e.g. SSC_TechCare_Backup_*.json) downloaded from this system. Raw .db binary files cannot be restored directly through the browser.');
+      e.target.value = '';
+      return;
+    }
+    if (!file.name.endsWith('.json')) {
+      showError('Please select a valid database snapshot file (.json)');
+      e.target.value = '';
       return;
     }
     setSelectedBackupFile(file);
     setRestoreConfirmOpen(true);
+    e.target.value = '';
   };
 
   const executeRestore = async () => {
@@ -736,7 +743,7 @@ export default function Settings({ currentUser }) {
                   <h3 className="text-base font-bold text-white">Download Live Database Snapshot</h3>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 max-w-xl">
-                  Download an exact copy of the active SQLite database file (<code className="text-slate-300 font-mono">service_center.db</code>) containing all customer profiles, repair histories, inventory levels, billing records, and audit logs.
+                  Download a complete structured JSON snapshot (<code className="text-slate-300 font-mono">.json</code> format) containing all customer profiles, repair histories, inventory levels, billing records, and settings.
                 </p>
               </div>
 
@@ -746,7 +753,7 @@ export default function Settings({ currentUser }) {
                 className="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2 shrink-0 disabled:opacity-50"
               >
                 {backupLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>Download Backup (.db)</span>
+                <span>Download Snapshot (.json)</span>
               </button>
             </div>
           </div>
@@ -760,7 +767,7 @@ export default function Settings({ currentUser }) {
                   <h3 className="text-base font-bold text-white">Restore Database from Backup</h3>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 max-w-xl">
-                  Upload a previously downloaded <code className="text-slate-300 font-mono">.db</code> file to replace or restore data. An automated safety rollback snapshot is automatically generated before restoring.
+                  Upload a previously downloaded <code className="text-slate-300 font-mono">.json</code> snapshot file to restore your database records, inventory parts, tickets, and invoices.
                 </p>
               </div>
 
@@ -768,7 +775,7 @@ export default function Settings({ currentUser }) {
                 <input
                   type="file"
                   id="dbRestoreInput"
-                  accept=".db,.sqlite"
+                  accept=".json,.db,.sqlite"
                   onChange={handleRestoreFileSelected}
                   className="hidden"
                 />
@@ -777,7 +784,7 @@ export default function Settings({ currentUser }) {
                   className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-amber-500/50 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Upload className="w-4 h-4 text-amber-400" />
-                  <span>Choose .db File to Restore</span>
+                  <span>Choose Backup File (.json)</span>
                 </label>
               </div>
             </div>
