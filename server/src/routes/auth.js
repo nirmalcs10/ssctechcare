@@ -527,6 +527,71 @@ router.post('/master-reset-password', async (req, res) => {
   }
 });
 
+// POST /api/auth/master-verify-old-password
+router.post('/master-verify-old-password', async (req, res) => {
+  try {
+    let rawEmail = (req.body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const { oldPassword } = req.body;
+
+    if (!rawEmail || !oldPassword) {
+      return res.status(400).json({ error: 'Email and current password are required' });
+    }
+
+    const account = await db.prepare(
+      'SELECT id, email, password_hash, salt FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1'
+    ).get(rawEmail);
+
+    if (!account || !db.verifyPassword(oldPassword, account.password_hash, account.salt)) {
+      return res.status(401).json({ error: 'Current password is incorrect. Please check and try again.' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Current password verified. Please enter your new password.'
+    });
+  } catch (err) {
+    console.error('Master verify old password error:', err);
+    return res.status(500).json({ error: 'Failed to verify current password' });
+  }
+});
+
+// POST /api/auth/master-reset-with-old-password
+router.post('/master-reset-with-old-password', async (req, res) => {
+  try {
+    let rawEmail = (req.body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+
+    if (!rawEmail || !oldPassword) return res.status(400).json({ error: 'Email and current password are required' });
+    if (!newPassword || !confirmPassword) return res.status(400).json({ error: 'Both new password and confirmation are required' });
+    if (newPassword !== confirmPassword) return res.status(400).json({ error: 'New password and confirmation password do not match' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+
+    const account = await db.prepare(
+      'SELECT id, email, password_hash, salt FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1'
+    ).get(rawEmail);
+
+    if (!account || !db.verifyPassword(oldPassword, account.password_hash, account.salt)) {
+      return res.status(401).json({ error: 'Current password is incorrect. Please check and try again.' });
+    }
+
+    const { hash, salt } = db.hashPassword(newPassword);
+    await db.prepare(
+      'UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?'
+    ).run(hash, salt, account.id);
+    await db.prepare('DELETE FROM master_sessions WHERE master_account_id = ?').run(account.id);
+
+    return res.json({
+      success: true,
+      message: 'Gateway password updated successfully! You can now log in with your new password.'
+    });
+  } catch (err) {
+    console.error('Master reset with old password error:', err);
+    return res.status(500).json({ error: 'Failed to update password' });
+  }
+});
+
 // Periodic cleanup of expired sessions (runs every 30 minutes)
 setInterval(async () => {
   try {

@@ -184,6 +184,20 @@ export const api = {
     });
   },
 
+  masterVerifyOldPassword: async (payload) => {
+    return request('/auth/master-verify-old-password', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  masterResetWithOldPassword: async (payload) => {
+    return request('/auth/master-reset-with-old-password', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   masterLogout: async () => {
     try {
       await request('/auth/master-logout', { method: 'POST' });

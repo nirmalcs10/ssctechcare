@@ -460,6 +460,65 @@ export async function handleApiRequest(request, env) {
     });
   }
 
+  // Master Verify Old Password (Direct old-password verification on Gateway)
+  if (path === '/api/auth/master-verify-old-password' && method === 'POST') {
+    let rawEmail = (body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const oldPassword = body.oldPassword;
+
+    if (!rawEmail || !oldPassword) {
+      return err('Email and current password are required', 400);
+    }
+
+    const account = await d1.get(
+      db,
+      'SELECT id, email, password_hash, salt FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1',
+      rawEmail
+    );
+    if (!account || !verifyPassword(oldPassword, account.password_hash, account.salt)) {
+      return err('Current password is incorrect. Please check and try again.', 401);
+    }
+
+    return json({
+      success: true,
+      message: 'Current password verified. Please enter your new password.'
+    });
+  }
+
+  // Master Reset With Old Password (Verify old password and update to new password)
+  if (path === '/api/auth/master-reset-with-old-password' && method === 'POST') {
+    let rawEmail = (body.email || '').trim().toLowerCase();
+    if (!rawEmail || rawEmail === 'nirmalaws10@gamil.com') rawEmail = 'nirmalaws10@gmail.com';
+    const { oldPassword, newPassword, confirmPassword } = body;
+
+    if (!rawEmail || !oldPassword) return err('Email and current password are required', 400);
+    if (!newPassword || !confirmPassword) return err('Both new password and confirmation are required', 400);
+    if (newPassword !== confirmPassword) return err('New password and confirmation password do not match', 400);
+    if (newPassword.length < 6) return err('New password must be at least 6 characters long', 400);
+
+    const account = await d1.get(
+      db,
+      'SELECT id, email, password_hash, salt FROM master_accounts WHERE LOWER(email) = LOWER(?) AND is_active = 1',
+      rawEmail
+    );
+    if (!account || !verifyPassword(oldPassword, account.password_hash, account.salt)) {
+      return err('Current password is incorrect. Please check and try again.', 401);
+    }
+
+    const { hash, salt } = hashPassword(newPassword);
+    await d1.run(
+      db,
+      'UPDATE master_accounts SET password_hash = ?, salt = ? WHERE id = ?',
+      hash, salt, account.id
+    );
+    await d1.run(db, 'DELETE FROM master_sessions WHERE master_account_id = ?', account.id);
+
+    return json({
+      success: true,
+      message: 'Gateway password updated successfully! You can now log in with your new password.'
+    });
+  }
+
   // Staff Login
   if (path === '/api/auth/login' && method === 'POST') {
     const { username, password } = body;
