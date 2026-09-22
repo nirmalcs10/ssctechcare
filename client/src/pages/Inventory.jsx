@@ -254,7 +254,7 @@ export default function Inventory() {
             filename="SSC_Spare_Parts_Inventory"
             sheetName="Spare Parts"
             columns={inventoryColumns}
-            data={filteredItems}
+            data={items}
             label="Export Excel"
           />
           {duplicateNames.size > 0 && (
