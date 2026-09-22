@@ -11,6 +11,28 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import RevenueModal from '../components/RevenueModal';
+import ExportButton from '../components/ExportButton';
+import { formatDate } from '../utils/date';
+
+const invoiceColumns = [
+  { header: 'Invoice #', key: 'invoice_number', width: 16 },
+  { header: 'Date', key: 'created_at', width: 14, format: v => formatDate(v) },
+  { header: 'Ticket #', key: 'ticket_number', width: 14 },
+  { header: 'Customer Name', key: 'customer_name', width: 22 },
+  { header: 'Customer Phone', key: 'customer_phone', width: 16 },
+  { header: 'Device', key: 'device_brand', width: 20, format: (v, row) => `${row.device_brand || ''} ${row.device_model || ''}`.trim() },
+  { header: 'Parts Total (₹)', key: 'parts_total', type: 'number', width: 15, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Labor Charges (₹)', key: 'labor_charges', type: 'number', width: 16, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Subtotal (₹)', key: 'subtotal', type: 'number', width: 15, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Tax Rate (%)', key: 'tax_rate', type: 'number', width: 13, format: v => Number(v || 0) },
+  { header: 'Discount (₹)', key: 'discount', type: 'number', width: 14, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Grand Total (₹)', key: 'grand_total', type: 'number', width: 16, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Amount Paid (₹)', key: 'amount_paid', type: 'number', width: 16, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Balance Due (₹)', key: 'balance_due', type: 'number', width: 16, format: v => Number(v || 0).toFixed(2) },
+  { header: 'Payment Status', key: 'payment_status', width: 15 },
+  { header: 'Payment Method', key: 'payment_method', width: 16 },
+  { header: 'Notes', key: 'notes', width: 30 }
+];
 
 export default function Invoices({ 
   onPrintInvoice, 
@@ -259,6 +281,12 @@ export default function Invoices({
           <p className="text-sm text-slate-400">Generate customer receipts, compute labor + parts, and manage collections</p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+          <ExportButton
+            filename="SSC_Billing_Invoices"
+            sheetName="Invoices"
+            columns={invoiceColumns}
+            data={invoices}
+          />
           <button
             onClick={() => setIsRevenueModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-sm"

@@ -14,6 +14,21 @@ import {
   Search 
 } from 'lucide-react';
 import { api } from '../api';
+import ExportButton from '../components/ExportButton';
+import { formatDate } from '../utils/date';
+
+const technicianColumns = [
+  { header: 'Technician ID', key: 'id', width: 15 },
+  { header: 'Name', key: 'name', width: 22 },
+  { header: 'Phone', key: 'phone', width: 16 },
+  { header: 'Email', key: 'email', width: 25 },
+  { header: 'Specialization', key: 'specialization', width: 30 },
+  { header: 'Status', key: 'status', width: 12 },
+  { header: 'Active Jobs', key: 'active_jobs', type: 'number', width: 13, format: v => Number(v || 0) },
+  { header: 'Completed Jobs', key: 'completed_jobs', type: 'number', width: 15, format: v => Number(v || 0) },
+  { header: 'Total Assigned', key: 'total_jobs', type: 'number', width: 14, format: (v, row) => Number((row.active_jobs || 0) + (row.completed_jobs || 0)) },
+  { header: 'Created Date', key: 'created_at', width: 16, format: v => formatDate(v) }
+];
 
 export default function Technicians({ onSelectTicket }) {
   const [technicians, setTechnicians] = useState([]);
@@ -150,13 +165,21 @@ export default function Technicians({ onSelectTicket }) {
           <h1 className="text-2xl font-bold text-white tracking-tight">Technicians</h1>
           <p className="text-sm text-slate-400">Manage hardware repair specialists, monitor active workloads & performance</p>
         </div>
-        <button
-          onClick={() => setIsAddOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Technician</span>
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <ExportButton
+            filename="SSC_Technicians_Roster"
+            sheetName="Technicians"
+            columns={technicianColumns}
+            data={filteredTechs}
+          />
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Technician</span>
+          </button>
+        </div>
       </div>
 
       {/* Global Feedback Banner */}

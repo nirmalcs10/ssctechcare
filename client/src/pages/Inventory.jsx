@@ -9,6 +9,7 @@ import {
   X 
 } from 'lucide-react';
 import { api } from '../api';
+import ExportButton from '../components/ExportButton';
 
 export default function Inventory() {
   const [items, setItems] = useState([]);
@@ -217,6 +218,29 @@ export default function Inventory() {
     }
   };
 
+  const inventoryColumns = [
+    { header: 'SKU / Code', key: 'sku', format: (val, item) => val || `PART-${String(item.id).padStart(4, '0')}` },
+    { header: 'Item Name', key: 'name' },
+    { header: 'Category', key: 'category' },
+    { header: 'Compatible Brand/Models', key: 'brand_compat', format: (val) => val || 'Universal' },
+    { header: 'Serial / Batch #', key: 'serial_no', format: (val) => val || '-' },
+    { header: 'Stock Quantity', key: 'stock_quantity', format: (val) => Number(val) || 0 },
+    { header: 'Min Threshold', key: 'min_threshold', format: (val) => Number(val) || 3 },
+    { header: 'Cost Price (₹)', key: 'cost_price', format: (val) => Number(val) || 0 },
+    { header: 'Selling Price (₹)', key: 'selling_price', format: (val) => Number(val) || 0 },
+    { header: 'Stock Value (₹)', key: 'stock_value', format: (_, item) => (Number(item.stock_quantity) || 0) * (Number(item.cost_price) || 0) },
+    { header: 'Storage Location', key: 'location', format: (val) => val || '-' },
+    { 
+      header: 'Stock Status', 
+      key: 'status', 
+      format: (_, item) => {
+        const qty = Number(item.stock_quantity) || 0;
+        const min = Number(item.min_threshold) || 3;
+        return qty <= 0 ? 'Out of Stock' : qty <= min ? 'Low Stock' : 'In Stock';
+      }
+    }
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -225,7 +249,14 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold text-white tracking-tight">Spare Parts & Warehouse Inventory</h1>
           <p className="text-sm text-slate-400">Track replacement displays, SSDs, RAM, batteries, cooling fans & thermals</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+          <ExportButton
+            filename="SSC_Spare_Parts_Inventory"
+            sheetName="Spare Parts"
+            columns={inventoryColumns}
+            data={filteredItems}
+            label="Export Excel"
+          />
           {duplicateNames.size > 0 && (
             <button
               onClick={handleDeduplicate}
@@ -238,7 +269,7 @@ export default function Inventory() {
           )}
           <button
             onClick={() => setIsAddOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95 self-start sm:self-auto"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Add Spare Part</span>
