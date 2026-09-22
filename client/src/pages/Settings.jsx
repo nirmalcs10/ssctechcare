@@ -840,9 +840,10 @@ export default function Settings({ currentUser }) {
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
               Theme Mode
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {[
                 { id: 'cyberpunk', name: 'Cyberpunk Slate', desc: 'Dark slate with vibrant cyan/sky glow', color: 'bg-slate-900 border-sky-500/50' },
+                { id: 'white', name: 'Pure White (Light)', desc: 'Bright daylight mode with crisp high contrast', color: 'bg-white border-slate-300' },
                 { id: 'midnight', name: 'Midnight Indigo', desc: 'Deep navy blue with purple accents', color: 'bg-indigo-950 border-indigo-500/50' },
                 { id: 'obsidian', name: 'Obsidian Graphite', desc: 'Deep black for OLED & high contrast', color: 'bg-neutral-950 border-neutral-700' },
                 { id: 'emerald', name: 'Emerald Matrix', desc: 'Dark forest green with vibrant matrix glow', color: 'bg-emerald-950 border-emerald-500/50' }

@@ -13,7 +13,7 @@ export function applyAppearance(settings) {
   const body = document.body;
 
   // Clear previous theme, accent, and density classes
-  const themeClasses = ['theme-cyberpunk', 'theme-midnight', 'theme-obsidian', 'theme-emerald'];
+  const themeClasses = ['theme-cyberpunk', 'theme-midnight', 'theme-obsidian', 'theme-emerald', 'theme-white'];
   const accentClasses = ['accent-sky', 'accent-emerald', 'accent-amber', 'accent-indigo', 'accent-rose'];
   const densityClasses = ['density-comfortable', 'density-compact'];
 

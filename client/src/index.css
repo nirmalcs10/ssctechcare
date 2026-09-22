@@ -198,6 +198,221 @@ body.theme-emerald {
 }
 
 /* ====================================================
+   CLEAN WHITE (LIGHT) THEME
+   ==================================================== */
+
+.theme-white,
+.theme-white body,
+body.theme-white {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Base backgrounds */
+.theme-white .bg-slate-950,
+.theme-white .bg-slate-950\/95,
+.theme-white .bg-slate-950\/90,
+.theme-white .bg-slate-950\/80,
+.theme-white .bg-slate-950\/70,
+.theme-white .bg-slate-950\/60 {
+  background-color: #f8fafc !important;
+}
+
+.theme-white .bg-slate-900,
+.theme-white .bg-slate-900\/95,
+.theme-white .bg-slate-900\/90,
+.theme-white .bg-slate-900\/80,
+.theme-white .bg-slate-900\/70 {
+  background-color: #ffffff !important;
+}
+
+.theme-white .bg-slate-850,
+.theme-white .bg-slate-800,
+.theme-white .bg-slate-800\/80,
+.theme-white .bg-slate-800\/70,
+.theme-white .bg-slate-800\/60,
+.theme-white .bg-slate-800\/50,
+.theme-white .bg-slate-800\/40,
+.theme-white .bg-slate-800\/30 {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-white .bg-slate-700,
+.theme-white .bg-slate-700\/60,
+.theme-white .bg-slate-700\/50 {
+  background-color: #e2e8f0 !important;
+}
+
+/* Borders */
+.theme-white .border-slate-800,
+.theme-white .border-slate-800\/90,
+.theme-white .border-slate-800\/80,
+.theme-white .border-slate-800\/60,
+.theme-white .border-slate-800\/50,
+.theme-white .border-slate-800\/40,
+.theme-white .border-slate-700,
+.theme-white .border-slate-700\/80,
+.theme-white .border-slate-700\/60,
+.theme-white .border-slate-700\/50,
+.theme-white .border-slate-600 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Hovers */
+.theme-white .hover\:bg-slate-800:hover,
+.theme-white .hover\:bg-slate-800\/80:hover,
+.theme-white .hover\:bg-slate-800\/70:hover,
+.theme-white .hover\:bg-slate-800\/60:hover,
+.theme-white .hover\:bg-slate-800\/50:hover,
+.theme-white .hover\:bg-slate-750:hover,
+.theme-white .hover\:bg-slate-700:hover {
+  background-color: #e2e8f0 !important;
+}
+.theme-white .hover\:border-slate-700:hover,
+.theme-white .hover\:border-slate-600:hover {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text Colors */
+.theme-white .text-white,
+.theme-white .text-slate-100,
+.theme-white .text-slate-200 {
+  color: #0f172a !important;
+}
+
+.theme-white .text-slate-300 {
+  color: #334155 !important;
+}
+
+.theme-white .text-slate-400 {
+  color: #64748b !important;
+}
+
+.theme-white .text-slate-500 {
+  color: #64748b !important;
+}
+
+.theme-white .hover\:text-white:hover {
+  color: #0284c7 !important;
+}
+
+/* Preserve White Text on Solid Buttons, Badges, and Gradients */
+.theme-white button[class*="from-sky-"],
+.theme-white button[class*="from-emerald-"],
+.theme-white button[class*="from-rose-"],
+.theme-white button[class*="from-amber-"],
+.theme-white [class*="from-sky-"] .text-white,
+.theme-white [class*="from-sky-500"],
+.theme-white [class*="bg-sky-500"] .text-white,
+.theme-white [class*="bg-sky-600"] .text-white,
+.theme-white [class*="bg-emerald-600"] .text-white,
+.theme-white [class*="bg-rose-600"] .text-white,
+.theme-white [class*="bg-amber-600"] .text-white,
+.theme-white .bg-gradient-to-r.text-white,
+.theme-white .text-white.bg-sky-500,
+.theme-white .text-white.bg-sky-600,
+.theme-white .text-white.bg-emerald-600,
+.theme-white .text-white.bg-rose-600,
+.theme-white .bg-gradient-to-tr .text-white {
+  color: #ffffff !important;
+}
+
+/* Form Inputs, Selects, and Textareas */
+.theme-white input:not([type="checkbox"]):not([type="radio"]),
+.theme-white select,
+.theme-white textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+.theme-white input:not([type="checkbox"]):not([type="radio"]):focus,
+.theme-white select:focus,
+.theme-white textarea:focus {
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2) !important;
+}
+.theme-white input::placeholder,
+.theme-white textarea::placeholder {
+  color: #94a3b8 !important;
+}
+.theme-white select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Tables, Theads & Divides */
+.theme-white table thead,
+.theme-white table thead tr,
+.theme-white table thead th {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+.theme-white table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+.theme-white .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+.theme-white .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+/* Modals & Dialogs */
+.theme-white .bg-black\/80,
+.theme-white .bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.55) !important;
+}
+
+/* Elevated Shadows for clean cards in light mode */
+.theme-white .shadow-xl,
+.theme-white .shadow-2xl,
+.theme-white .shadow-lg {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Scrollbars in Light Mode */
+.theme-white ::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+.theme-white ::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+}
+.theme-white ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+/* Light Mode Status Badges */
+.theme-white .bg-emerald-950,
+.theme-white .bg-emerald-950\/80 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+.theme-white .bg-amber-950,
+.theme-white .bg-amber-950\/80 {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+  color: #b45309 !important;
+}
+.theme-white .bg-rose-950,
+.theme-white .bg-rose-950\/80 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #be123c !important;
+}
+.theme-white .bg-sky-950,
+.theme-white .bg-sky-950\/80,
+.theme-white .bg-sky-950\/40 {
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+  color: #0369a1 !important;
+}
+
+/* Dashboard Top Welcome Banner in Light Mode */
+.theme-white .from-slate-900.via-slate-800.to-sky-950\/40 {
+  background-image: linear-gradient(to right, #ffffff, #f1f5f9, #e0f2fe) !important;
+}
+
+/* ====================================================
    ACCENT COLOR OVERRIDES
    ==================================================== */
 
