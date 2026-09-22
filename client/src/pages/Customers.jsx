@@ -14,7 +14,7 @@ import {
   CheckCircle2, 
   X 
 } from 'lucide-react';
-import { api } from '../api';
+import { api, getStoredUser } from '../api';
 import EditCustomerModal from '../components/EditCustomerModal';
 import ExportButton from '../components/ExportButton';
 import { formatDate } from '../utils/date';
@@ -33,7 +33,10 @@ const customerColumns = [
   { header: 'Notes', key: 'notes', width: 30 }
 ];
 
-export default function Customers({ onSelectTicket, onNavigate }) {
+export default function Customers({ onSelectTicket, onNavigate, currentUser }) {
+  const userRole = currentUser?.role || getStoredUser()?.role;
+  const canExport = userRole !== 'frontdesk';
+
   const [customers, setCustomers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -135,12 +138,14 @@ export default function Customers({ onSelectTicket, onNavigate }) {
           <p className="text-sm text-slate-400">View client contact profiles, past serviced laptops, and total billing history</p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <ExportButton
-            filename="SSC_Customer_Directory"
-            sheetName="Customers"
-            columns={customerColumns}
-            data={customers}
-          />
+          {canExport && (
+            <ExportButton
+              filename="SSC_Customer_Directory"
+              sheetName="Customers"
+              columns={customerColumns}
+              data={customers}
+            />
+          )}
           <button
             onClick={() => setIsAddOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all active:scale-95"

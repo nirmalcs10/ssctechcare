@@ -9,7 +9,7 @@ import {
   Calendar,
   Filter
 } from 'lucide-react';
-import { api } from '../api';
+import { api, getStoredUser } from '../api';
 import RevenueModal from '../components/RevenueModal';
 import ExportButton from '../components/ExportButton';
 import { formatDate } from '../utils/date';
@@ -39,8 +39,12 @@ export default function Invoices({
   onSelectTicket, 
   preselectedTicketId, 
   preselectedInvoiceId,
-  onClearPreselect 
+  onClearPreselect,
+  currentUser 
 }) {
+  const userRole = currentUser?.role || getStoredUser()?.role;
+  const canExport = userRole !== 'frontdesk';
+
   const [invoices, setInvoices] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -281,12 +285,14 @@ export default function Invoices({
           <p className="text-sm text-slate-400">Generate customer receipts, compute labor + parts, and manage collections</p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
-          <ExportButton
-            filename="SSC_Billing_Invoices"
-            sheetName="Invoices"
-            columns={invoiceColumns}
-            data={invoices}
-          />
+          {canExport && (
+            <ExportButton
+              filename="SSC_Billing_Invoices"
+              sheetName="Invoices"
+              columns={invoiceColumns}
+              data={invoices}
+            />
+          )}
           <button
             onClick={() => setIsRevenueModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-sm"

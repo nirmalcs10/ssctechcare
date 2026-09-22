@@ -346,6 +346,7 @@ export default function App() {
             <Customers
               onSelectTicket={handleSelectTicket}
               onNavigate={handleNavigate}
+              currentUser={currentUser}
             />
           )}
 
@@ -359,6 +360,7 @@ export default function App() {
               }}
               onPrintInvoice={handlePrintInvoice}
               onSelectTicket={handleSelectTicket}
+              currentUser={currentUser}
             />
           )}
 
